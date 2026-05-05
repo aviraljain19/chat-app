@@ -49,11 +49,14 @@ const Sidebar = ({ setSelectedGroup }) => {
     try {
       const userInfo = JSON.parse(localStorage.getItem("userInfo") || {});
       const token = userInfo.token;
-      const { data } = await axios.get("http://localhost:5000/api/groups", {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const { data } = await axios.get(
+        "https://chat-app-ochre-ten-30.vercel.app//api/groups",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
-      });
+      );
       setGroups(data);
       const userGroupIds = data
         ?.filter((group) => {
@@ -73,7 +76,7 @@ const Sidebar = ({ setSelectedGroup }) => {
       const userInfo = JSON.parse(localStorage.getItem("userInfo") || {});
       const token = userInfo.token;
       await axios.post(
-        "http://localhost:5000/api/groups",
+        "https://chat-app-ochre-ten-30.vercel.app//api/groups",
         {
           name: newGroupName,
           description: newGroupDescription,
@@ -110,7 +113,7 @@ const Sidebar = ({ setSelectedGroup }) => {
       const userInfo = JSON.parse(localStorage.getItem("userInfo") || {});
       const token = userInfo.token;
       await axios.post(
-        `http://localhost:5000/api/groups/${groupId}/join`,
+        `https://chat-app-ochre-ten-30.vercel.app//api/groups/${groupId}/join`,
         {},
         {
           headers: {
@@ -142,7 +145,7 @@ const Sidebar = ({ setSelectedGroup }) => {
       const userInfo = JSON.parse(localStorage.getItem("userInfo") || {});
       const token = userInfo.token;
       await axios.post(
-        `http://localhost:5000/api/groups/${groupId}/leave`,
+        `https://chat-app-ochre-ten-30.vercel.app//api/groups/${groupId}/leave`,
         {},
         {
           headers: {
