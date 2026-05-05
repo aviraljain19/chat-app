@@ -94,7 +94,7 @@ const ChatArea = ({ selectedGroup, socket, setSelectedGroup }) => {
     const token = currentUser?.token;
     try {
       const { data } = await axios.get(
-        `https://chat-app-ochre-ten-30.vercel.app//api/messages/${selectedGroup?._id}`,
+        `https://chat-app-ochre-ten-30.vercel.app/api/messages/${selectedGroup?._id}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -112,7 +112,7 @@ const ChatArea = ({ selectedGroup, socket, setSelectedGroup }) => {
     try {
       const token = currentUser.token;
       const { data } = await axios.post(
-        `https://chat-app-ochre-ten-30.vercel.app//api/messages`,
+        `https://chat-app-ochre-ten-30.vercel.app/api/messages`,
         {
           content: newMessage,
           groupId: selectedGroup?._id,
