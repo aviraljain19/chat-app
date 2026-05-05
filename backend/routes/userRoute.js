@@ -29,11 +29,13 @@ userRouter.post("/login", async (req, res) => {
     const user = await User.findOne({ email });
     if (user && (await user.comparePassword(password))) {
       res.json({
-        _id: user._id,
-        username: user.username,
-        email: user.email,
-        isAdmin: user.isAdmin,
-        token: generateToken(user._id),
+        user: {
+          _id: user._id,
+          username: user.username,
+          email: user.email,
+          isAdmin: user.isAdmin,
+          token: generateToken(user._id),
+        },
       });
     } else {
       res.status(401).json({ message: "Invalid email or password" });

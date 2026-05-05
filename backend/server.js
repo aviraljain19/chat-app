@@ -2,10 +2,10 @@ const dotenv = require("dotenv");
 const express = require("express");
 const mongoose = require("mongoose");
 const http = require("http");
-const socketIo = require("socket.io");
+const socketio = require("socket.io");
 const cors = require("cors");
 const userRouter = require("./routes/userRoute");
-const socketio = require("./socket");
+const socketIo = require("./socket");
 const groupRouter = require("./routes/groupRoute");
 const messageRouter = require("./routes/messageRoute");
 dotenv.config();
@@ -13,9 +13,9 @@ dotenv.config();
 const app = express();
 
 const server = http.createServer(app);
-const io = socketIo(server, {
+const io = socketio(server, {
   cors: {
-    origin: "*",
+    origin: "http://localhost:5173",
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -35,12 +35,12 @@ mongoose
     console.error("Error connecting to MongoDB:", err);
   });
 
-socketio(io);
+socketIo(io);
 
 app.use("/api/users", userRouter);
 app.use("/api/groups", groupRouter);
 app.use("/api/messages", messageRouter);
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });

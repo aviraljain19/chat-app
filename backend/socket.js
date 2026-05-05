@@ -3,7 +3,6 @@ const socket = (io) => {
 
   io.on("connection", (socket) => {
     console.log("A user connected:", socket.id);
-    v;
     const user = socket.handshake.auth.user;
 
     socket.on("join room", (groupId) => {
@@ -25,7 +24,7 @@ const socket = (io) => {
 
       if (connectedUsers.has(socket.id)) {
         connectedUsers.delete(socket.id);
-        socket.to(groupId).emit("user left", user?.user.username);
+        socket.to(groupId).emit("user left", user?._id);
       }
     });
 
@@ -37,16 +36,18 @@ const socket = (io) => {
       console.log("A user disconnected:", socket.id);
       if (connectedUsers.has(socket.id)) {
         const userData = connectedUsers.get(socket.id);
-        socket.to(userData.room).emit("user left", user?._id);
+        socket.to(userData.room).emit("user left", userData.user?._id);
         connectedUsers.delete(socket.id);
       }
     });
 
-    socket.on("typing", (groupId, username) => {
+    socket.on("typing", (data) => {
+      const { groupId, username } = data;
       socket.to(groupId).emit("user typing", { username });
     });
 
-    socket.on("stop typing", (groupId) => {
+    socket.on("stop typing", (data) => {
+      const { groupId } = data;
       socket.to(groupId).emit("user stop typing", { username: user?.username });
     });
   });

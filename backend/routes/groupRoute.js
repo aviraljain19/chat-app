@@ -52,4 +52,26 @@ groupRouter.post("/:id/join", protect, async (req, res) => {
   }
 });
 
+groupRouter.post("/:id/leave", protect, async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.id);
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+    if (!group.members.includes(req.user._id)) {
+      return res.status(400).json({ message: "Not a member of the group" });
+    }
+    group.members = group.members.filter(
+      (memberId) => memberId.toString() !== req.user._id.toString(),
+    );
+    await group.save();
+    const populatedGroup = await Group.findById(group._id)
+      .populate("admin", "username email")
+      .populate("members", "username email");
+    res.json(populatedGroup);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
 module.exports = groupRouter;
