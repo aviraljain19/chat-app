@@ -1,97 +1,52 @@
 import {
+  Avatar,
   Box,
-  VStack,
-  HStack,
-  Text,
-  Input,
   Button,
   Flex,
-  Icon,
-  Avatar,
-  InputGroup,
-  InputRightElement,
+  IconButton,
+  Input,
+  Spinner,
+  Text,
+  VStack,
   useToast,
 } from "@chakra-ui/react";
-import { FiSend, FiInfo, FiMessageCircle } from "react-icons/fi";
-import UsersList from "./UsersList";
-import { useEffect, useRef, useState } from "react";
 import axios from "axios";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FiArrowLeft,
+  FiInfo,
+  FiMessageCircle,
+  FiSearch,
+  FiSend,
+  FiSmile,
+} from "react-icons/fi";
+import UsersList from "./UsersList";
+
+const getStoredUser = () => {
+  try {
+    const storedUser = localStorage.getItem("userInfo");
+    return storedUser ? JSON.parse(storedUser) : null;
+  } catch {
+    return null;
+  }
+};
 
 const ChatArea = ({ selectedGroup, socket, setSelectedGroup }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [connectedUsers, setConnectedUsers] = useState([]);
-  const [isTyping, setIsTyping] = useState(false);
   const [typingUsers, setTypingUsers] = useState(new Set());
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const toast = useToast();
 
-  const currentUser = JSON.parse(localStorage.getItem("userInfo") || {});
+  const currentUser = useMemo(() => getStoredUser(), []);
 
-  useEffect(() => {
-    if (selectedGroup && socket) {
-      //fetch messages
-      fetchMessages();
-      socket.emit("join room", selectedGroup?._id);
-      socket.on("message received", (newMessage) => {
-        setMessages((prev) => [...prev, newMessage]);
-      });
-
-      socket.on("users in room", (users) => {
-        setConnectedUsers(users);
-      });
-
-      socket.on("user joined", (user) => {
-        setConnectedUsers((prev) => [...prev, user]);
-      });
-
-      socket.on("user left", (userId) => {
-        setConnectedUsers((prev) =>
-          prev.filter((user) => user?._id !== userId),
-        );
-      });
-
-      socket.on("notification", (notification) => {
-        toast({
-          title:
-            notification?.type === "USER_JOINED" ? "New User" : "Notification",
-          description: notification.message,
-          status: "info",
-          duration: 3000,
-          isClosable: true,
-          position: "top-right",
-        });
-      });
-
-      socket.on("user typing", ({ username }) => {
-        setTypingUsers((prev) => new Set(prev).add(username));
-      });
-
-      socket.on("user stop typing", ({ username }) => {
-        setTypingUsers((prev) => {
-          const newSet = new Set(prev);
-          newSet.delete(username);
-          return newSet;
-        });
-      });
-      //clean up
-      return () => {
-        socket.emit("leave room", selectedGroup?._id);
-        socket.off("message received");
-        socket.off("users in room");
-        socket.off("user joined");
-        socket.off("user left");
-        socket.off("notification");
-        socket.off("user typing");
-        socket.off("user stop typing");
-      };
-    }
-  }, [selectedGroup, socket, toast]);
-
-  const fetchMessages = async () => {
-    const currentUser = JSON.parse(localStorage.getItem("userInfo") || {});
+  const fetchMessages = useCallback(async () => {
+    setIsLoadingMessages(true);
     const token = currentUser?.token;
+
     try {
       const { data } = await axios.get(
         `https://chat-app-ochre-ten-30.vercel.app/api/messages/${selectedGroup?._id}`,
@@ -99,16 +54,90 @@ const ChatArea = ({ selectedGroup, socket, setSelectedGroup }) => {
           headers: { Authorization: `Bearer ${token}` },
         },
       );
-      setMessages(data);
-    } catch (error) {
-      console.log(error);
+      setMessages(data || []);
+    } catch {
+      console.log("Failed to fetch messages");
+    } finally {
+      setIsLoadingMessages(false);
     }
-  };
+  }, [currentUser?.token, selectedGroup?._id]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, typingUsers]);
+
+  useEffect(() => {
+    if (!selectedGroup || !socket) return undefined;
+
+    const syncMessages = async () => {
+      await fetchMessages();
+    };
+
+    syncMessages();
+    socket.emit("join room", selectedGroup?._id);
+
+    const handleMessageReceived = (newMessageData) => {
+      setMessages((prev) => [...prev, newMessageData]);
+    };
+
+    const handleUsersInRoom = (users) => setConnectedUsers(users);
+    const handleUserJoined = (user) => {
+      setConnectedUsers((prev) => {
+        if (!prev.some((entry) => entry?._id === user?._id)) {
+          return [...prev, user];
+        }
+        return prev;
+      });
+    };
+    const handleUserLeft = (userId) => {
+      setConnectedUsers((prev) => prev.filter((user) => user?._id !== userId));
+    };
+    const handleNotification = (notification) => {
+      toast({
+        title:
+          notification?.type === "USER_JOINED" ? "New member" : "Notification",
+        description: notification.message,
+        status: "info",
+        duration: 3000,
+        isClosable: true,
+        position: "top-right",
+      });
+    };
+    const handleUserTyping = ({ username }) => {
+      setTypingUsers((prev) => new Set(prev).add(username));
+    };
+    const handleUserStopTyping = ({ username }) => {
+      setTypingUsers((prev) => {
+        const next = new Set(prev);
+        next.delete(username);
+        return next;
+      });
+    };
+
+    socket.on("message received", handleMessageReceived);
+    socket.on("users in room", handleUsersInRoom);
+    socket.on("user joined", handleUserJoined);
+    socket.on("user left", handleUserLeft);
+    socket.on("notification", handleNotification);
+    socket.on("user typing", handleUserTyping);
+    socket.on("user stop typing", handleUserStopTyping);
+
+    return () => {
+      socket.emit("leave room", selectedGroup?._id);
+      socket.off("message received", handleMessageReceived);
+      socket.off("users in room", handleUsersInRoom);
+      socket.off("user joined", handleUserJoined);
+      socket.off("user left", handleUserLeft);
+      socket.off("notification", handleNotification);
+      socket.off("user typing", handleUserTyping);
+      socket.off("user stop typing", handleUserStopTyping);
+      setTypingUsers(new Set());
+    };
+  }, [selectedGroup, socket, toast, fetchMessages]);
 
   const sendMessage = async () => {
-    if (!newMessage.trim()) {
-      return;
-    }
+    if (!newMessage.trim() || !selectedGroup) return;
+
     try {
       const token = currentUser.token;
       const { data } = await axios.post(
@@ -121,14 +150,15 @@ const ChatArea = ({ selectedGroup, socket, setSelectedGroup }) => {
           headers: { Authorization: `Bearer ${token}` },
         },
       );
+
       socket.emit("new message", {
         ...data,
         groupId: selectedGroup?._id,
       });
 
-      setMessages([...messages, data]);
+      setMessages((prev) => [...prev, data]);
       setNewMessage("");
-    } catch (error) {
+    } catch {
       toast({
         title: "Error sending message",
         status: "error",
@@ -139,9 +169,12 @@ const ChatArea = ({ selectedGroup, socket, setSelectedGroup }) => {
   };
 
   const handleTyping = (e) => {
-    setNewMessage(e.target.value);
-    if (!isTyping && selectedGroup) {
-      setIsTyping(true);
+    const value = e.target.value;
+    setNewMessage(value);
+
+    if (!selectedGroup || !socket) return;
+
+    if (value.trim() && !typingTimeoutRef.current) {
       socket.emit("typing", {
         groupId: selectedGroup?._id,
         username: currentUser.username,
@@ -154,303 +187,387 @@ const ChatArea = ({ selectedGroup, socket, setSelectedGroup }) => {
 
     typingTimeoutRef.current = setTimeout(() => {
       if (selectedGroup) {
-        socket.emit("stop typing", {
-          groupId: selectedGroup?._id,
-        });
+        socket.emit("stop typing", { groupId: selectedGroup?._id });
       }
-      setIsTyping(false);
-    }, 2000);
+      typingTimeoutRef.current = null;
+    }, 1800);
   };
 
-  const formatTime = (date) => {
-    return new Date(date).toLocaleTimeString("en-US", {
+  const formatTime = (date) =>
+    new Date(date).toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
     });
-  };
+
+  const formatDateSeparator = (date) =>
+    new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(new Date(date));
+
+  const messageGroups = messages.reduce((acc, message) => {
+    const date = new Date(message.createdAt).toDateString();
+    if (!acc[date]) acc[date] = [];
+    acc[date].push(message);
+    return acc;
+  }, {});
 
   const renderTypingIndicator = () => {
     if (typingUsers.size === 0) return null;
-    const typingUsersArray = Array.from(typingUsers);
 
-    return typingUsersArray?.map((username) => (
-      <Box
-        key={username}
-        alignSelf={
-          username === currentUser?.username ? "flex-start" : "flex-end"
-        }
-        maxW="70%"
-      >
-        <Flex
-          align="center"
-          bg={username === currentUser?.username ? "blue.50" : "gray.50"}
-          p={2}
-          borderRadius="lg"
-          gap={2}
+    const typingUsersArray = Array.from(typingUsers).filter(
+      (username) => username !== currentUser?.username,
+    );
+
+    if (!typingUsersArray.length) return null;
+
+    return (
+      <Flex align="center" gap={2} alignSelf="flex-start" px={2}>
+        <Avatar size="xs" name={typingUsersArray[0]} bg="brand.500" />
+        <Box
+          bg="rgba(15, 23, 42, 0.9)"
+          border="1px solid"
+          borderColor="whiteAlpha.200"
+          px={3}
+          py={2}
+          borderRadius="18px"
         >
-          {username === currentUser?.username ? (
-            <>
-              <Avatar size="xs" name={username} />
-              <Flex align="center" gap={1}>
-                <Text fontSize="sm" color="gray.500" fontStyle="italic">
-                  You are typing
-                </Text>
-                <Flex gap={1}>
-                  {[1, 2, 3].map((dot) => (
-                    <Box
-                      key={dot}
-                      w="3px"
-                      h="3px"
-                      borderRadius="full"
-                      bg="gray.500"
-                    />
-                  ))}
-                </Flex>
-              </Flex>
-            </>
-          ) : (
-            <>
-              <Flex align="center" gap={1}>
-                <Text fontSize="sm" color="gray.500" fontStyle="italic">
-                  {username} is typing
-                </Text>
-                <Flex gap={1}>
-                  {[1, 2, 3].map((dot) => (
-                    <Box
-                      key={dot}
-                      w="3px"
-                      h="3px"
-                      borderRadius="full"
-                      bg="gray.500"
-                    />
-                  ))}
-                </Flex>
-              </Flex>
-              <Avatar size="xs" name={username} />
-            </>
-          )}
-        </Flex>
-      </Box>
-    ));
+          <Text
+            fontSize="12px"
+            color="gray.300"
+            fontWeight="600"
+            textTransform="capitalize"
+          >
+            {typingUsersArray[0]} is typing
+          </Text>
+          <Flex mt={1} gap={1}>
+            {[1, 2, 3].map((dot) => (
+              <Box
+                key={dot}
+                w="5px"
+                h="5px"
+                borderRadius="full"
+                bg="gray.400"
+                opacity={0.8 - dot * 0.25}
+              />
+            ))}
+          </Flex>
+        </Box>
+      </Flex>
+    );
   };
+
   return (
-    <Flex h="100%" position="relative">
-      <Box
-        flex="1"
-        display="flex"
-        flexDirection="column"
-        bg="gray.50"
-        maxW={`calc(100% - 260px)`}
-      >
+    <Flex h="100%" w="100%" bg="brand.950" position="relative">
+      <Box flex="1" display="flex" flexDirection="column" minW={0} h="100%">
         {selectedGroup ? (
           <>
-            {/* Chat Header */}
             <Flex
-              px={6}
+              px={{ base: 4, md: 6 }}
               py={4}
-              bg="white"
+              bg="rgba(15, 23, 42, 0.7)"
               borderBottom="1px solid"
-              borderColor="gray.200"
+              borderColor="whiteAlpha.100"
               align="center"
-              boxShadow="sm"
+              gap={3}
+              backdropFilter="blur(12px)"
             >
-              <Button
-                display={{ base: "inline-flex", md: "none" }}
+              <IconButton
+                display={{ base: "flex", md: "none" }}
+                aria-label="Back to conversations"
+                size="sm"
                 variant="ghost"
-                mr={2}
+                color="gray.200"
+                icon={<FiArrowLeft />}
                 onClick={() => setSelectedGroup(null)}
-              >
-                ←
-              </Button>
-              <Icon
-                as={FiMessageCircle}
-                fontSize="24px"
-                color="blue.500"
-                mr={3}
               />
-              <Box flex="1">
-                <Text fontSize="lg" fontWeight="bold" color="gray.800">
+
+              <Avatar
+                name={selectedGroup?.name}
+                size="md"
+                bg="linear-gradient(135deg, #4f46e5, #7c3aed)"
+                color="white"
+              />
+
+              <Box flex="1" minW={0}>
+                <Text
+                  fontSize="lg"
+                  fontWeight="700"
+                  color="white"
+                  noOfLines={1}
+                >
                   {selectedGroup?.name}
                 </Text>
-                <Text fontSize="sm" color="gray.500">
-                  {selectedGroup?.description}
+                <Text fontSize="12px" color="gray.400">
+                  {selectedGroup?.description || "Group conversation"}
                 </Text>
               </Box>
-              <Icon
-                as={FiInfo}
-                fontSize="20px"
-                color="gray.400"
-                cursor="pointer"
-                _hover={{ color: "blue.500" }}
-              />
+
+              <Flex align="center" gap={2}>
+                <IconButton
+                  aria-label="Search in conversation"
+                  variant="ghost"
+                  size="sm"
+                  icon={<FiSearch />}
+                  color="gray.300"
+                  _hover={{ bg: "whiteAlpha.100" }}
+                />
+                <IconButton
+                  aria-label="Conversation info"
+                  variant="ghost"
+                  size="sm"
+                  icon={<FiInfo />}
+                  color="gray.300"
+                  _hover={{ bg: "whiteAlpha.100" }}
+                />
+              </Flex>
             </Flex>
 
-            {/* Messages Area */}
             <VStack
               flex="1"
               overflowY="auto"
               spacing={4}
               align="stretch"
-              px={6}
-              py={4}
-              position="relative"
-              sx={{
-                "&::-webkit-scrollbar": {
-                  width: "8px",
-                },
-                "&::-webkit-scrollbar-track": {
-                  width: "10px",
-                },
-                "&::-webkit-scrollbar-thumb": {
-                  background: "gray.200",
-                  borderRadius: "24px",
-                },
-              }}
+              px={{ base: 3, md: 6 }}
+              py={{ base: 4, md: 6 }}
+              bg="rgba(9, 15, 29, 0.7)"
             >
-              {messages.map((message) => (
-                <Box
-                  key={message._id}
-                  alignSelf={
-                    message.sender._id === currentUser?._id
-                      ? "flex-start"
-                      : "flex-end"
-                  }
-                  maxW="70%"
+              {isLoadingMessages ? (
+                <Flex align="center" justify="center" h="100%" color="gray.300">
+                  <Spinner size="sm" mr={3} />
+                  <Text>Loading messages…</Text>
+                </Flex>
+              ) : messages.length === 0 ? (
+                <Flex
+                  direction="column"
+                  align="center"
+                  justify="center"
+                  h="100%"
+                  textAlign="center"
+                  px={8}
                 >
-                  <Flex direction="column" gap={1}>
-                    <Flex
-                      align="center"
-                      mb={1}
-                      justifyContent={
-                        message.sender._id === currentUser?._id
-                          ? "flex-start"
-                          : "flex-end"
-                      }
-                      gap={2}
-                    >
-                      {message.sender._id === currentUser?._id ? (
-                        <>
-                          <Avatar size="xs" name={message.sender.username} />
-                          <Text fontSize="xs" color="gray.500">
-                            You • {formatTime(message.createdAt)}
-                          </Text>
-                        </>
-                      ) : (
-                        <>
-                          <Text fontSize="xs" color="gray.500">
-                            {message.sender.username} •{" "}
-                            {formatTime(message.createdAt)}
-                          </Text>
-                          <Avatar size="xs" name={message.sender.username} />
-                        </>
-                      )}
+                  <Box
+                    as={FiMessageCircle}
+                    fontSize="56px"
+                    color="gray.600"
+                    mb={4}
+                  />
+                  <Text fontSize="2xl" fontWeight="700" color="white" mb={2}>
+                    Start the conversation
+                  </Text>
+                  <Text color="gray.400" maxW="420px">
+                    Say hello to your team and share updates, ideas, and quick
+                    progress notes here.
+                  </Text>
+                </Flex>
+              ) : (
+                Object.entries(messageGroups).map(([dateKey, dayMessages]) => (
+                  <Box key={dateKey}>
+                    <Flex align="center" my={3} justify="center">
+                      <Box flex="1" height="1px" bg="whiteAlpha.200" />
+                      <Text
+                        fontSize="11px"
+                        color="gray.400"
+                        mx={4}
+                        letterSpacing="0.08em"
+                        textTransform="uppercase"
+                      >
+                        {formatDateSeparator(dateKey)}
+                      </Text>
+                      <Box flex="1" height="1px" bg="whiteAlpha.200" />
                     </Flex>
 
-                    <Box
-                      bg={
-                        message.sender._id === currentUser?._id
-                          ? "blue.500"
-                          : "white"
-                      }
-                      color={
-                        message.sender._id === currentUser?._id
-                          ? "white"
-                          : "gray.800"
-                      }
-                      p={3}
-                      borderRadius="lg"
-                      boxShadow="sm"
-                    >
-                      <Text>{message.content}</Text>
-                    </Box>
-                  </Flex>
-                </Box>
-              ))}
+                    {dayMessages.map((message, index) => {
+                      const isCurrentUser =
+                        message.sender?._id === currentUser?._id;
+                      const isSequence =
+                        index > 0 &&
+                        dayMessages[index - 1].sender?._id ===
+                          message.sender?._id;
+
+                      return (
+                        <Flex
+                          key={message._id}
+                          direction="column"
+                          align={isCurrentUser ? "flex-end" : "flex-start"}
+                          mb={3}
+                          maxW="100%"
+                        >
+                          {!isSequence && (
+                            <Text
+                              fontSize="11px"
+                              color="gray.400"
+                              mb={1}
+                              mx={2}
+                              fontWeight="600"
+                            >
+                              {isCurrentUser
+                                ? "You"
+                                : message.sender?.username || "Member"}
+                            </Text>
+                          )}
+
+                          <Flex align="center" gap={2} maxW="75%">
+                            {!isCurrentUser && !isSequence && (
+                              <Avatar
+                                size="xs"
+                                name={message.sender?.username || "Member"}
+                                bg="gray.700"
+                              />
+                            )}
+
+                            <Box
+                              px={4}
+                              py={3}
+                              borderRadius="20px"
+                              bg={
+                                isCurrentUser
+                                  ? "linear-gradient(135deg, #4f46e5, #7c3aed)"
+                                  : "rgba(15,23,42,0.9)"
+                              }
+                              border={isCurrentUser ? "none" : "1px solid"}
+                              borderColor={
+                                isCurrentUser ? "transparent" : "whiteAlpha.200"
+                              }
+                              color={isCurrentUser ? "white" : "gray.100"}
+                              boxShadow={
+                                isCurrentUser
+                                  ? "0 10px 24px rgba(79, 70, 229, 0.28)"
+                                  : "none"
+                              }
+                              wordBreak="break-word"
+                            >
+                              <Text lineHeight="1.5" whiteSpace="pre-wrap">
+                                {message.content}
+                              </Text>
+                            </Box>
+
+                            {isCurrentUser && !isSequence && (
+                              <Avatar
+                                size="xs"
+                                name={currentUser?.username || "You"}
+                                bg="brand.500"
+                              />
+                            )}
+                          </Flex>
+
+                          {!isSequence && (
+                            <Text
+                              fontSize="10px"
+                              color="gray.500"
+                              mt={1}
+                              mx={2}
+                              alignSelf={
+                                isCurrentUser ? "flex-end" : "flex-start"
+                              }
+                            >
+                              {formatTime(message.createdAt)}
+                            </Text>
+                          )}
+                        </Flex>
+                      );
+                    })}
+                  </Box>
+                ))
+              )}
+
               {renderTypingIndicator()}
               <div ref={messagesEndRef} />
             </VStack>
 
             <Box
-              p={4}
-              bg="white"
+              bg="rgba(15, 23, 42, 0.8)"
               borderTop="1px solid"
-              borderColor="gray.200"
-              position="relative"
-              zIndex="1"
+              borderColor="whiteAlpha.100"
+              px={{ base: 3, md: 5 }}
+              py={4}
             >
-              <InputGroup size="lg">
+              <Flex
+                align="center"
+                gap={3}
+                bg="rgba(17, 24, 39, 0.9)"
+                border="1px solid"
+                borderColor="whiteAlpha.100"
+                borderRadius="18px"
+                px={3}
+                py={2}
+              >
+                <IconButton
+                  aria-label="Emoji picker"
+                  variant="ghost"
+                  size="sm"
+                  icon={<FiSmile />}
+                  color="gray.300"
+                  _hover={{ bg: "whiteAlpha.100" }}
+                />
                 <Input
                   value={newMessage}
                   onChange={handleTyping}
-                  placeholder="Type your message..."
-                  pr="4.5rem"
-                  bg="gray.50"
-                  border="none"
-                  _focus={{
-                    boxShadow: "none",
-                    bg: "gray.100",
-                  }}
-                  onKeyPress={(e) => {
-                    if (e.key === "Enter") {
+                  placeholder="Message to #group"
+                  variant="unstyled"
+                  color="white"
+                  resize="none"
+                  _placeholder={{ color: "gray.500" }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
                       sendMessage();
                     }
                   }}
                 />
-                <InputRightElement width="4.5rem">
-                  <Button
-                    h="1.75rem"
-                    size="sm"
-                    colorScheme="blue"
-                    borderRadius="full"
-                    _hover={{
-                      transform: "translateY(-1px)",
-                    }}
-                    transition="all 0.2s"
-                    onClick={sendMessage}
-                  >
-                    <Icon as={FiSend} />
-                  </Button>
-                </InputRightElement>
-              </InputGroup>
+                <Button
+                  colorScheme="brand"
+                  borderRadius="12px"
+                  px={4}
+                  rightIcon={<FiSend />}
+                  isDisabled={!newMessage.trim()}
+                  _disabled={{ opacity: 0.5, cursor: "not-allowed" }}
+                  onClick={sendMessage}
+                >
+                  Send
+                </Button>
+              </Flex>
             </Box>
           </>
         ) : (
-          <>
-            <Flex
-              h="100%"
-              direction="column"
-              align="center"
-              justify="center"
-              p={8}
-              textAlign="center"
-            >
-              <Icon
-                as={FiMessageCircle}
-                fontSize="64px"
-                color="gray.300"
-                mb={4}
-              />
-              <Text fontSize="xl" fontWeight="medium" color="gray.500" mb={2}>
-                Welcome to the Chat
-              </Text>
-              <Text color="gray.500" mb={2}>
-                Select a group from the sidebar to start chatting
-              </Text>
-            </Flex>
-          </>
+          <Flex
+            h="100%"
+            direction="column"
+            align="center"
+            justify="center"
+            p={8}
+            textAlign="center"
+            bg="linear-gradient(180deg, rgba(15, 23, 42, 0.75), rgba(9, 15, 29, 0.95))"
+          >
+            <Box
+              as={FiMessageCircle}
+              fontSize="72px"
+              color="brand.400"
+              mb={6}
+            />
+            <Text fontSize="2xl" fontWeight="700" color="white" mb={2}>
+              Welcome to EchoSpace
+            </Text>
+            <Text color="gray.400" maxW="420px">
+              Select a group from the sidebar to read messages, join
+              discussions, and stay close with your team.
+            </Text>
+          </Flex>
         )}
       </Box>
 
-      {/* UsersList with fixed width */}
       <Box
-        width="260px"
-        position="sticky"
-        right={0}
-        top={0}
-        height="100%"
-        flexShrink={0}
+        w={{ base: "0px", xl: "280px" }}
+        minW={{ base: "0px", xl: "280px" }}
+        display={{ base: "none", xl: "block" }}
+        borderLeft="1px solid"
+        borderColor="whiteAlpha.100"
+        bg="rgba(15, 23, 42, 0.88)"
       >
-        {selectedGroup && <UsersList users={connectedUsers} />}
+        {selectedGroup && (
+          <UsersList users={connectedUsers} selectedGroup={selectedGroup} />
+        )}
       </Box>
     </Flex>
   );

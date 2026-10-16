@@ -12,7 +12,6 @@ import {
   VStack,
   HStack,
   Badge,
-  Input,
 } from "@chakra-ui/react";
 import { Link as RouterLink } from "react-router-dom";
 import {
@@ -20,11 +19,9 @@ import {
   FiUsers,
   FiLock,
   FiLogIn,
-  FiLogOut,
   FiUserPlus,
   FiGlobe,
   FiActivity,
-  FiCheckCircle,
   FiUserCheck,
 } from "react-icons/fi";
 

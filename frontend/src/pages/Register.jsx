@@ -4,13 +4,14 @@ import {
   FormControl,
   FormLabel,
   Input,
-  VStack,
   Text,
+  VStack,
   useToast,
 } from "@chakra-ui/react";
 import axios from "axios";
 import { useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { FiArrowRight, FiCheckCircle } from "react-icons/fi";
+import { Link, useNavigate } from "react-router-dom";
 
 const Register = () => {
   const [username, setUsername] = useState("");
@@ -19,11 +20,13 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const navigate = useNavigate();
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+
     try {
-      const { data } = await axios.post(
+      await axios.post(
         "https://chat-app-ochre-ten-30.vercel.app/api/users/register",
         {
           username,
@@ -31,165 +34,176 @@ const Register = () => {
           password,
         },
       );
+
+      toast({
+        title: "Account created",
+        description: "Your account is ready. Sign in to continue.",
+        status: "success",
+        duration: 4000,
+        isClosable: true,
+      });
+
       navigate("/login");
     } catch (error) {
       toast({
-        title: "Registration Failed",
+        title: "Registration failed",
         description: error.response?.data?.message || "An error occurred",
         status: "error",
         duration: 5000,
         isClosable: true,
       });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
     <Box
-      w="100%"
-      h="100vh"
+      minH="100vh"
+      bg="radial-gradient(circle at top right, rgba(59,130,246,0.2), transparent 30%), linear-gradient(180deg, #0b1220 0%, #101828 100%)"
       display="flex"
       alignItems="center"
       justifyContent="center"
-      bgGradient="linear(to-r, indigo.500, purple.500)"
+      px={4}
+      py={10}
     >
       <Box
-        display="flex"
-        w={["95%", "90%", "80%", "75%"]}
-        maxW="1200px"
-        h={["auto", "auto", "600px"]}
-        borderRadius="2xl"
+        w="full"
+        maxW="1100px"
+        minH={{ base: "auto", md: "640px" }}
+        bg="rgba(15, 23, 42, 0.82)"
+        border="1px solid"
+        borderColor="whiteAlpha.200"
+        borderRadius="32px"
         overflow="hidden"
-        boxShadow="2xl"
+        boxShadow="0 30px 80px rgba(15, 23, 42, 0.55)"
+        display="flex"
+        flexDirection={{ base: "column", md: "row" }}
       >
-        {/* Left Panel - Hidden on mobile */}
         <Box
-          display={["none", "none", "flex"]}
-          w="50%"
-          bgImage="url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe')"
+          flex="1"
+          bg="linear-gradient(135deg, rgba(76, 29, 149, 0.9), rgba(59,130,246,0.8)), url('https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80')"
           bgSize="cover"
           bgPosition="center"
           position="relative"
+          px={{ base: 6, md: 10 }}
+          py={{ base: 8, md: 12 }}
+          display="flex"
+          alignItems="flex-end"
         >
           <Box
-            position="absolute"
-            top="0"
-            left="0"
-            right="0"
-            bottom="0"
-            bg="blackAlpha.600"
-            display="flex"
-            flexDirection="column"
-            justifyContent="center"
-            p={10}
-            color="white"
+            bg="rgba(15, 23, 42, 0.22)"
+            border="1px solid"
+            borderColor="whiteAlpha.200"
+            borderRadius="24px"
+            p={6}
+            maxW="420px"
+            backdropFilter="blur(8px)"
           >
-            <Text fontSize="4xl" fontWeight="bold" mb={4}>
-              Join Our Chat Community
+            <Box as={FiCheckCircle} color="white" fontSize="48px" mb={4} />
+            <Text
+              fontSize={{ base: "3xl", md: "4xl" }}
+              fontWeight="800"
+              color="white"
+              mb={3}
+            >
+              Build your circle
             </Text>
-            <Text fontSize="lg" maxW="400px">
-              Connect with friends and start chatting instantly
+            <Text fontSize="lg" color="whiteAlpha.800" lineHeight="1.7">
+              Join a modern space for team updates, quick collaboration, and
+              real-time conversations.
             </Text>
           </Box>
         </Box>
 
-        {/* Right Panel - Registration Form */}
         <Box
-          w={["100%", "100%", "50%"]}
-          bg="white"
-          p={[6, 8, 10]}
+          flex="1"
+          bg="rgba(15, 23, 42, 0.86)"
           display="flex"
-          flexDirection="column"
+          alignItems="center"
           justifyContent="center"
+          p={{ base: 6, md: 10 }}
         >
-          {/* Mobile Header - Shown only on mobile */}
-          <Box display={["block", "block", "none"]} textAlign="center" mb={6}>
-            <Text fontSize="2xl" fontWeight="bold" color="gray.800">
-              Create Account
-            </Text>
-          </Box>
+          <VStack spacing={5} w="100%" maxW="420px">
+            <Box textAlign="center">
+              <Text fontSize="3xl" fontWeight="800" color="white" mb={2}>
+                Create account
+              </Text>
+              <Text color="gray.400">
+                Set up your profile and start chatting in minutes.
+              </Text>
+            </Box>
 
-          <VStack spacing={5} w="100%" maxW="400px" mx="auto">
-            <FormControl id="username" isRequired>
-              <FormLabel color="gray.700" fontWeight="medium">
-                Username
-              </FormLabel>
+            <FormControl>
+              <FormLabel color="gray.300">Username</FormLabel>
               <Input
                 type="text"
-                size="lg"
-                bg="gray.50"
-                borderColor="gray.200"
-                _hover={{ borderColor: "indigo.500" }}
-                _focus={{ borderColor: "indigo.500" }}
-                placeholder="Choose a username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                placeholder="sonya_dev"
+                bg="whiteAlpha.50"
+                border="1px solid"
+                borderColor="whiteAlpha.200"
+                color="white"
+                _placeholder={{ color: "gray.500" }}
               />
             </FormControl>
 
-            <FormControl id="email" isRequired>
-              <FormLabel color="gray.700" fontWeight="medium">
-                Email
-              </FormLabel>
+            <FormControl>
+              <FormLabel color="gray.300">Email</FormLabel>
               <Input
                 type="email"
-                size="lg"
-                bg="gray.50"
-                borderColor="gray.200"
-                _hover={{ borderColor: "indigo.500" }}
-                _focus={{ borderColor: "indigo.500" }}
-                placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                bg="whiteAlpha.50"
+                border="1px solid"
+                borderColor="whiteAlpha.200"
+                color="white"
+                _placeholder={{ color: "gray.500" }}
               />
             </FormControl>
 
-            <FormControl id="password" isRequired>
-              <FormLabel color="gray.700" fontWeight="medium">
-                Password
-              </FormLabel>
+            <FormControl>
+              <FormLabel color="gray.300">Password</FormLabel>
               <Input
                 type="password"
-                size="lg"
-                bg="gray.50"
-                borderColor="gray.200"
-                _hover={{ borderColor: "indigo.500" }}
-                _focus={{ borderColor: "indigo.500" }}
-                placeholder="Create a password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                placeholder="Create a secure password"
+                bg="whiteAlpha.50"
+                border="1px solid"
+                borderColor="whiteAlpha.200"
+                color="white"
+                _placeholder={{ color: "gray.500" }}
               />
             </FormControl>
 
             <Button
-              isLoading={loading}
               onClick={handleSubmit}
-              colorScheme="purple"
-              width="100%"
-              transform="auto"
-              _hover={{ scale: 1.05 }}
-              transition="transform 0.2s"
+              isLoading={loading}
+              colorScheme="brand"
               size="lg"
-              fontSize="md"
-              mt={4}
+              width="100%"
+              borderRadius="14px"
+              rightIcon={<FiArrowRight />}
             >
-              Create Account
+              Create account
             </Button>
 
-            <Text color="gray.600" pt={4}>
-              Already have an account?{" "}
-              <Link
-                to="/login"
-                style={{
-                  color: "var(--chakra-colors-indigo-600)",
-                  fontWeight: "500",
-                  transition: "color 0.2s",
-                }}
-                _hover={{ color: "indigo.700" }}
-              >
-                Sign in
-              </Link>
-            </Text>
+            <Box
+              w="100%"
+              borderTop="1px solid"
+              borderColor="whiteAlpha.200"
+              pt={4}
+            >
+              <Text color="gray.400" textAlign="center">
+                Already have an account?{" "}
+                <Link to="/login" style={{ color: "#a5b4fc", fontWeight: 700 }}>
+                  Sign in
+                </Link>
+              </Text>
+            </Box>
           </VStack>
         </Box>
       </Box>
