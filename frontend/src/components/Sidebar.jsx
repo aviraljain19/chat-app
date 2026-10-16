@@ -41,29 +41,91 @@ const getStoredUser = () => {
   }
 };
 
-const Sidebar = ({ setSelectedGroup }) => {
+const Sidebar = ({ setSelectedGroup, setSelectedDM }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [groups, setGroups] = useState([]);
+  const [dmThreads, setDmThreads] = useState([]);
+  const [users, setUsers] = useState([]);
   const [userGroups, setUserGroups] = useState([]);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupDescription, setNewGroupDescription] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
-  const [isAdmin, setIsAdmin] = useState(false);
   const toast = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
-    checkAdminStatus();
     fetchGroups();
+    fetchUsers();
+    fetchDMThreads();
   }, []);
 
   const currentUser = useMemo(() => getStoredUser(), []);
 
-  const checkAdminStatus = () => {
-    const userInfo = getStoredUser();
-    if (userInfo && userInfo.isAdmin) {
-      setIsAdmin(true);
+  const fetchUsers = async () => {
+    try {
+      const userInfo = getStoredUser();
+      const token = userInfo?.token;
+      if (!token) return;
+
+      const { data } = await axios.get(
+        "https://chat-app-ochre-ten-30.vercel.app/api/users",
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      setUsers((data || []).filter((user) => user._id !== userInfo._id));
+    } catch (error) {
+      console.log("Error fetching users:", error);
+    }
+  };
+
+  const fetchDMThreads = async () => {
+    try {
+      const userInfo = getStoredUser();
+      const token = userInfo?.token;
+      if (!token) return;
+
+      const { data } = await axios.get(
+        "https://chat-app-ochre-ten-30.vercel.app/api/dm/threads",
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      setDmThreads(data || []);
+    } catch (error) {
+      console.log("Error fetching DM threads:", error);
+    }
+  };
+
+  const handleStartDM = async (otherUserId) => {
+    try {
+      const userInfo = getStoredUser();
+      const token = userInfo?.token;
+      if (!token) {
+        navigate("/login");
+        return;
+      }
+
+      const { data } = await axios.post(
+        "https://chat-app-ochre-ten-30.vercel.app/api/dm/thread",
+        { userId: otherUserId },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      setSelectedDM(data);
+      setSelectedGroup(null);
+      await fetchDMThreads();
+    } catch (error) {
+      toast({
+        title: "Error starting chat",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+        description: error.response?.data?.message || "An error occurred",
+      });
     }
   };
 
@@ -304,19 +366,17 @@ const Sidebar = ({ setSelectedGroup }) => {
           </Box>
         </Flex>
 
-        {isAdmin && (
-          <Tooltip label="Create new group" placement="left">
-            <IconButton
-              aria-label="Create group"
-              icon={<FiPlus />}
-              variant="ghost"
-              size="sm"
-              color="gray.200"
-              _hover={{ bg: "whiteAlpha.100", color: "white" }}
-              onClick={onOpen}
-            />
-          </Tooltip>
-        )}
+        <Tooltip label="Create new group" placement="left">
+          <IconButton
+            aria-label="Create group"
+            icon={<FiPlus />}
+            variant="ghost"
+            size="sm"
+            color="gray.200"
+            _hover={{ bg: "whiteAlpha.100", color: "white" }}
+            onClick={onOpen}
+          />
+        </Tooltip>
       </Flex>
 
       <Box p={4} borderBottom="1px solid" borderColor="whiteAlpha.100">
@@ -409,6 +469,117 @@ const Sidebar = ({ setSelectedGroup }) => {
             Exit
           </Button>
         </Flex>
+      </Box>
+
+      <Box p={4} pb={0}>
+        <Text
+          fontSize="xs"
+          color="gray.400"
+          fontWeight="700"
+          letterSpacing="0.08em"
+          textTransform="uppercase"
+          mb={2}
+        >
+          Direct messages
+        </Text>
+        <VStack spacing={2} align="stretch">
+          {dmThreads.length === 0 ? (
+            <Text fontSize="12px" color="gray.400">
+              No private chats yet
+            </Text>
+          ) : (
+            dmThreads.map((thread) => {
+              const otherUser = (thread.participants || []).find(
+                (participant) => participant._id !== currentUser?._id,
+              );
+
+              return (
+                <Box
+                  key={thread._id}
+                  p={2.5}
+                  borderRadius="14px"
+                  border="1px solid"
+                  borderColor="whiteAlpha.100"
+                  bg="rgba(15,23,42,0.7)"
+                  cursor="pointer"
+                  onClick={() => {
+                    setSelectedDM(thread);
+                    setSelectedGroup(null);
+                  }}
+                  _hover={{ bg: "rgba(79, 70, 229, 0.08)" }}
+                >
+                  <Flex align="center" gap={3}>
+                    <Avatar
+                      size="sm"
+                      name={otherUser?.username || "User"}
+                      bg="brand.500"
+                    />
+                    <Box flex="1" minW={0}>
+                      <Text fontWeight="600" color="white" noOfLines={1}>
+                        {otherUser?.username || "Direct message"}
+                      </Text>
+                      <Text fontSize="11px" color="gray.400" noOfLines={1}>
+                        {thread.lastMessage?.content || "Say hello"}
+                      </Text>
+                    </Box>
+                  </Flex>
+                </Box>
+              );
+            })
+          )}
+        </VStack>
+      </Box>
+
+      <Box p={4} pb={0}>
+        <Text
+          fontSize="xs"
+          color="gray.400"
+          fontWeight="700"
+          letterSpacing="0.08em"
+          textTransform="uppercase"
+          mb={2}
+        >
+          People
+        </Text>
+        <VStack spacing={2} align="stretch">
+          {users.length === 0 ? (
+            <Text fontSize="12px" color="gray.400">
+              No other users found
+            </Text>
+          ) : (
+            users.map((user) => (
+              <Flex
+                key={user._id}
+                align="center"
+                justify="space-between"
+                p={2.5}
+                borderRadius="14px"
+                border="1px solid"
+                borderColor="whiteAlpha.100"
+                bg="rgba(15,23,42,0.7)"
+              >
+                <Flex align="center" gap={3} minW={0}>
+                  <Avatar size="sm" name={user.username} bg="gray.700" />
+                  <Box minW={0}>
+                    <Text fontWeight="600" color="white" noOfLines={1}>
+                      {user.username}
+                    </Text>
+                    <Text fontSize="11px" color="gray.400" noOfLines={1}>
+                      {user.email}
+                    </Text>
+                  </Box>
+                </Flex>
+                <Button
+                  size="xs"
+                  colorScheme="brand"
+                  onClick={() => handleStartDM(user._id)}
+                >
+                  Message
+                </Button>
+              </Flex>
+            ))
+          )}
+        </VStack>
       </Box>
 
       <Box flex="1" overflowY="auto" px={4} py={4}>

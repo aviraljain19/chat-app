@@ -7,9 +7,9 @@ const socket = (io) => {
 
     socket.on("join room", (groupId) => {
       socket.join(groupId);
-      connectedUsers.set(socket.id, { user, room: groupId });
+      connectedUsers.set(socket.id, { user, room: groupId, type: "group" });
       const usersInRoom = Array.from(connectedUsers.values())
-        .filter((u) => u.room === groupId)
+        .filter((u) => u.room === groupId && u.type === "group")
         .map((u) => u.user);
       io.in(groupId).emit("users in room", usersInRoom);
       socket.to(groupId).emit("notification", {
@@ -23,8 +23,27 @@ const socket = (io) => {
       socket.leave(groupId);
 
       if (connectedUsers.has(socket.id)) {
-        connectedUsers.delete(socket.id);
-        socket.to(groupId).emit("user left", user?._id);
+        const current = connectedUsers.get(socket.id);
+        if (current?.room === groupId && current?.type === "group") {
+          connectedUsers.delete(socket.id);
+          socket.to(groupId).emit("user left", user?._id);
+        }
+      }
+    });
+
+    socket.on("join dm", (threadId) => {
+      socket.join(threadId);
+      connectedUsers.set(socket.id, { user, room: threadId, type: "dm" });
+    });
+
+    socket.on("leave dm", (threadId) => {
+      socket.leave(threadId);
+
+      if (connectedUsers.has(socket.id)) {
+        const current = connectedUsers.get(socket.id);
+        if (current?.room === threadId && current?.type === "dm") {
+          connectedUsers.delete(socket.id);
+        }
       }
     });
 
@@ -32,11 +51,17 @@ const socket = (io) => {
       socket.to(message.groupId).emit("message received", message);
     });
 
+    socket.on("new dm message", (message) => {
+      socket.to(message.threadId).emit("dm message received", message);
+    });
+
     socket.on("disconnect", () => {
       console.log("A user disconnected:", socket.id);
       if (connectedUsers.has(socket.id)) {
         const userData = connectedUsers.get(socket.id);
-        socket.to(userData.room).emit("user left", userData.user?._id);
+        if (userData?.type === "group") {
+          socket.to(userData.room).emit("user left", userData.user?._id);
+        }
         connectedUsers.delete(socket.id);
       }
     });
@@ -46,9 +71,21 @@ const socket = (io) => {
       socket.to(groupId).emit("user typing", { username });
     });
 
+    socket.on("typing dm", (data) => {
+      const { threadId, username } = data;
+      socket.to(threadId).emit("user typing dm", { username });
+    });
+
     socket.on("stop typing", (data) => {
       const { groupId } = data;
       socket.to(groupId).emit("user stop typing", { username: user?.username });
+    });
+
+    socket.on("stop typing dm", (data) => {
+      const { threadId } = data;
+      socket
+        .to(threadId)
+        .emit("user stop typing dm", { username: user?.username });
     });
   });
 };

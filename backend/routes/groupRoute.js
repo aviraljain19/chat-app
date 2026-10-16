@@ -1,9 +1,9 @@
 const express = require("express");
 const groupRouter = express.Router();
 const Group = require("../models/GroupModel");
-const { protect, isAdmin } = require("../middleware/authMiddleware");
+const { protect } = require("../middleware/authMiddleware");
 
-groupRouter.post("/", protect, isAdmin, async (req, res) => {
+groupRouter.post("/", protect, async (req, res) => {
   const { name, description } = req.body;
   try {
     const group = await Group.create({
