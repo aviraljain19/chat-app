@@ -8,6 +8,7 @@ const userRouter = require("./routes/userRoute");
 const socketIo = require("./socket");
 const groupRouter = require("./routes/groupRoute");
 const messageRouter = require("./routes/messageRoute");
+const dmRouter = require("./routes/dmRoute");
 dotenv.config();
 
 const app = express();
@@ -40,6 +41,7 @@ socketIo(io);
 app.use("/api/users", userRouter);
 app.use("/api/groups", groupRouter);
 app.use("/api/messages", messageRouter);
+app.use("/api/dm", dmRouter);
 
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

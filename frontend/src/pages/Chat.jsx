@@ -4,7 +4,11 @@ import ChatArea from "../components/ChatArea";
 import { io } from "socket.io-client";
 import { useEffect, useState } from "react";
 
-const ENDPOINT = "https://chat-app-ochre-ten-30.vercel.app";
+const ENDPOINT =
+  import.meta.env.VITE_SOCKET_URL ||
+  (window.location.hostname === "localhost"
+    ? "http://localhost:5000"
+    : "https://chat-app-ochre-ten-30.vercel.app");
 
 const getStoredUser = () => {
   try {
@@ -17,7 +21,18 @@ const getStoredUser = () => {
 
 const Chat = () => {
   const [selectedGroup, setSelectedGroup] = useState(null);
+  const [selectedDM, setSelectedDM] = useState(null);
   const [socket, setSocket] = useState(null);
+
+  const handleSelectGroup = (group) => {
+    setSelectedGroup(group);
+    setSelectedDM(null);
+  };
+
+  const handleSelectDM = (dmThread) => {
+    setSelectedGroup(null);
+    setSelectedDM(dmThread);
+  };
 
   useEffect(() => {
     const userInfo = getStoredUser();
@@ -48,27 +63,39 @@ const Chat = () => {
       <Box
         w={{ base: "100%", md: "360px" }}
         minW={{ base: "100%", md: "360px" }}
-        h={{ base: selectedGroup ? "0" : "100%", md: "100vh" }}
-        display={{ base: selectedGroup ? "none" : "flex", md: "flex" }}
+        h={{ base: selectedGroup || selectedDM ? "0" : "100%", md: "100vh" }}
+        display={{
+          base: selectedGroup || selectedDM ? "none" : "flex",
+          md: "flex",
+        }}
         borderRight="1px solid"
         borderColor="whiteAlpha.200"
         bg="rgba(15, 23, 42, 0.75)"
         backdropFilter="blur(16px)"
       >
-        <Sidebar setSelectedGroup={setSelectedGroup} />
+        <Sidebar
+          socket={socket}
+          setSelectedGroup={handleSelectGroup}
+          setSelectedDM={handleSelectDM}
+        />
       </Box>
       <Box
         flex="1"
         minW={0}
         w="100%"
-        display={{ base: selectedGroup ? "flex" : "flex", md: "flex" }}
+        display={{
+          base: selectedGroup || selectedDM ? "flex" : "flex",
+          md: "flex",
+        }}
         bg="brand.950"
       >
         {socket && (
           <ChatArea
             selectedGroup={selectedGroup}
+            selectedDM={selectedDM}
             socket={socket}
             setSelectedGroup={setSelectedGroup}
+            setSelectedDM={setSelectedDM}
           />
         )}
       </Box>

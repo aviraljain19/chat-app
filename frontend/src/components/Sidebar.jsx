@@ -22,7 +22,7 @@ import {
   useToast,
 } from "@chakra-ui/react";
 import axios from "axios";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FiChevronRight,
   FiLogOut,
@@ -41,33 +41,103 @@ const getStoredUser = () => {
   }
 };
 
-const Sidebar = ({ setSelectedGroup }) => {
+const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [groups, setGroups] = useState([]);
+  const [dmThreads, setDmThreads] = useState([]);
+  const [users, setUsers] = useState([]);
   const [userGroups, setUserGroups] = useState([]);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupDescription, setNewGroupDescription] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
-  const [isAdmin, setIsAdmin] = useState(false);
   const toast = useToast();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    checkAdminStatus();
-    fetchGroups();
-  }, []);
-
   const currentUser = useMemo(() => getStoredUser(), []);
 
-  const checkAdminStatus = () => {
-    const userInfo = getStoredUser();
-    if (userInfo && userInfo.isAdmin) {
-      setIsAdmin(true);
+  const fetchUsers = useCallback(async () => {
+    try {
+      const userInfo = getStoredUser();
+      const token = userInfo?.token;
+      if (!token) return;
+
+      const { data } = await axios.get(
+        "https://chat-app-ochre-ten-30.vercel.app/api/users/allUsers",
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      setUsers((data || []).filter((user) => user._id !== userInfo?._id));
+    } catch (error) {
+      console.log("Error fetching users:", error);
+    }
+  }, []);
+
+  const openDMThread = (thread) => {
+    if (!thread) return;
+    const normalizedThread = {
+      ...thread,
+      participants: Array.isArray(thread.participants)
+        ? thread.participants
+        : [],
+    };
+    setSelectedGroup(null);
+    setSelectedDM(normalizedThread);
+  };
+
+  const handleStartDM = async (otherUserId) => {
+    try {
+      const userInfo = getStoredUser();
+      const token = userInfo?.token;
+      if (!token) {
+        navigate("/login");
+        return;
+      }
+
+      const { data } = await axios.post(
+        "https://chat-app-ochre-ten-30.vercel.app/api/dm/thread",
+        { userId: otherUserId },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      const thread = data || null;
+      if (thread) {
+        openDMThread(thread);
+      }
+      await fetchDMThreads();
+    } catch (error) {
+      toast({
+        title: "Error starting chat",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+        description: error.response?.data?.message || "An error occurred",
+      });
     }
   };
 
-  const fetchGroups = async () => {
+  const fetchDMThreads = useCallback(async () => {
+    try {
+      const userInfo = getStoredUser();
+      const token = userInfo?.token;
+      if (!token) return;
+
+      const { data } = await axios.get(
+        "https://chat-app-ochre-ten-30.vercel.app/api/dm/threads",
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      setDmThreads(data || []);
+    } catch (error) {
+      console.log("Error fetching DM threads:", error);
+    }
+  }, []);
+
+  const fetchGroups = useCallback(async () => {
     try {
       const userInfo = getStoredUser();
       const token = userInfo?.token;
@@ -95,7 +165,69 @@ const Sidebar = ({ setSelectedGroup }) => {
     } catch (error) {
       console.log("Error fetching groups:", error);
     }
-  };
+  }, [navigate]);
+
+  useEffect(() => {
+    fetchGroups();
+    fetchUsers();
+    fetchDMThreads();
+  }, [fetchGroups, fetchUsers, fetchDMThreads]);
+
+  useEffect(() => {
+    if (!socket) return undefined;
+
+    const handleRefreshSidebar = (payload) => {
+      if (payload?.groupId) {
+        socket.emit("join room", payload.groupId);
+      }
+
+      if (payload?.threadId) {
+        socket.emit("join dm", payload.threadId);
+      }
+
+      fetchGroups();
+      fetchDMThreads();
+    };
+
+    socket.on("message received", handleRefreshSidebar);
+    socket.on("dm message received", handleRefreshSidebar);
+
+    return () => {
+      socket.off("message received", handleRefreshSidebar);
+      socket.off("dm message received", handleRefreshSidebar);
+    };
+  }, [socket, fetchGroups, fetchDMThreads]);
+
+  useEffect(() => {
+    if (!socket) return undefined;
+
+    const refreshInterval = setInterval(() => {
+      fetchGroups();
+      fetchDMThreads();
+    }, 5000);
+
+    return () => clearInterval(refreshInterval);
+  }, [socket, fetchGroups, fetchDMThreads]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const refreshRooms = () => {
+      groups.forEach((group) => {
+        if (group?._id) {
+          socket.emit("join room", group._id);
+        }
+      });
+
+      dmThreads.forEach((thread) => {
+        if (thread?._id) {
+          socket.emit("join dm", thread._id);
+        }
+      });
+    };
+
+    refreshRooms();
+  }, [socket, groups, dmThreads]);
 
   const filteredGroups = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -255,6 +387,19 @@ const Sidebar = ({ setSelectedGroup }) => {
     navigate("/login");
   };
 
+  const isDMUnread = (thread) => {
+    const senderId =
+      thread?.lastMessage?.sender?._id || thread?.lastMessage?.sender;
+    return !!senderId && String(senderId) !== String(currentUser?._id);
+  };
+
+  const isGroupUnread = (group) => {
+    if (!group?.lastMessage) return false;
+    const senderId =
+      group.lastMessage?.sender?._id || group.lastMessage?.sender;
+    return !!senderId && String(senderId) !== String(currentUser?._id);
+  };
+
   return (
     <Box
       h="100%"
@@ -304,19 +449,17 @@ const Sidebar = ({ setSelectedGroup }) => {
           </Box>
         </Flex>
 
-        {isAdmin && (
-          <Tooltip label="Create new group" placement="left">
-            <IconButton
-              aria-label="Create group"
-              icon={<FiPlus />}
-              variant="ghost"
-              size="sm"
-              color="gray.200"
-              _hover={{ bg: "whiteAlpha.100", color: "white" }}
-              onClick={onOpen}
-            />
-          </Tooltip>
-        )}
+        <Tooltip label="Create new group" placement="left">
+          <IconButton
+            aria-label="Create group"
+            icon={<FiPlus />}
+            variant="ghost"
+            size="sm"
+            color="gray.200"
+            _hover={{ bg: "whiteAlpha.100", color: "white" }}
+            onClick={onOpen}
+          />
+        </Tooltip>
       </Flex>
 
       <Box p={4} borderBottom="1px solid" borderColor="whiteAlpha.100">
@@ -411,6 +554,134 @@ const Sidebar = ({ setSelectedGroup }) => {
         </Flex>
       </Box>
 
+      <Box p={4} pb={0}>
+        <Text
+          fontSize="xs"
+          color="gray.400"
+          fontWeight="700"
+          letterSpacing="0.08em"
+          textTransform="uppercase"
+          mb={2}
+        >
+          Direct messages
+        </Text>
+        <VStack spacing={2} align="stretch">
+          {dmThreads.length === 0 ? (
+            <Text fontSize="12px" color="gray.400">
+              No private chats yet
+            </Text>
+          ) : (
+            dmThreads.map((thread) => {
+              const otherUser = (thread.participants || []).find(
+                (participant) => participant._id !== currentUser?._id,
+              );
+
+              return (
+                <Box
+                  key={thread._id}
+                  p={2.5}
+                  borderRadius="14px"
+                  border="1px solid"
+                  borderColor={
+                    isDMUnread(thread)
+                      ? "rgba(129, 140, 248, 0.6)"
+                      : "whiteAlpha.100"
+                  }
+                  bg={
+                    isDMUnread(thread)
+                      ? "rgba(79, 70, 229, 0.12)"
+                      : "rgba(15,23,42,0.7)"
+                  }
+                  cursor="pointer"
+                  onClick={() => {
+                    setSelectedGroup(null);
+                    setSelectedDM(thread);
+                  }}
+                  _hover={{ bg: "rgba(79, 70, 229, 0.08)" }}
+                >
+                  <Flex align="center" gap={3}>
+                    <Avatar
+                      size="sm"
+                      name={otherUser?.username || "User"}
+                      bg="brand.500"
+                    />
+                    <Box flex="1" minW={0}>
+                      <Text
+                        fontWeight={isDMUnread(thread) ? "700" : "600"}
+                        color="white"
+                        noOfLines={1}
+                      >
+                        {otherUser?.username || "Direct message"}
+                      </Text>
+                      <Text
+                        fontSize="11px"
+                        color={isDMUnread(thread) ? "gray.200" : "gray.400"}
+                        noOfLines={1}
+                        fontWeight={isDMUnread(thread) ? "600" : "400"}
+                      >
+                        {thread.lastMessage?.content || "Say hello"}
+                      </Text>
+                    </Box>
+                  </Flex>
+                </Box>
+              );
+            })
+          )}
+        </VStack>
+      </Box>
+
+      <Box p={4} pb={0}>
+        <Text
+          fontSize="xs"
+          color="gray.400"
+          fontWeight="700"
+          letterSpacing="0.08em"
+          textTransform="uppercase"
+          mb={2}
+        >
+          People
+        </Text>
+        <VStack spacing={2} align="stretch">
+          {users.length === 0 ? (
+            <Text fontSize="12px" color="gray.400">
+              No other users found
+            </Text>
+          ) : (
+            users.map((user) => (
+              <Flex
+                key={user._id}
+                align="center"
+                justify="space-between"
+                p={2.5}
+                borderRadius="14px"
+                border="1px solid"
+                borderColor="whiteAlpha.100"
+                bg="rgba(15,23,42,0.7)"
+              >
+                <Flex align="center" gap={3} minW={0}>
+                  <Avatar size="sm" name={user.username} bg="gray.700" />
+                  <Box minW={0}>
+                    <Text fontWeight="600" color="white" noOfLines={1}>
+                      {user.username}
+                    </Text>
+                    <Text fontSize="11px" color="gray.400" noOfLines={1}>
+                      {user.email}
+                    </Text>
+                  </Box>
+                </Flex>
+                <Button
+                  size="xs"
+                  colorScheme="brand"
+                  onClick={() => handleStartDM(user._id)}
+                >
+                  Message
+                </Button>
+              </Flex>
+            ))
+          )}
+        </VStack>
+      </Box>
+
       <Box flex="1" overflowY="auto" px={4} py={4}>
         <VStack spacing={3} align="stretch">
           {filteredGroups.length === 0 ? (
@@ -441,11 +712,19 @@ const Sidebar = ({ setSelectedGroup }) => {
                   p={3}
                   borderRadius="20px"
                   bg={
-                    joined ? "rgba(79, 70, 229, 0.12)" : "rgba(15, 23, 42, 0.7)"
+                    joined
+                      ? isGroupUnread(group)
+                        ? "rgba(79, 70, 229, 0.18)"
+                        : "rgba(79, 70, 229, 0.12)"
+                      : "rgba(15, 23, 42, 0.7)"
                   }
                   border="1px solid"
                   borderColor={
-                    joined ? "rgba(129, 140, 248, 0.4)" : "whiteAlpha.100"
+                    isGroupUnread(group)
+                      ? "rgba(129, 140, 248, 0.7)"
+                      : joined
+                        ? "rgba(129, 140, 248, 0.4)"
+                        : "whiteAlpha.100"
                   }
                   cursor="pointer"
                   transition="all 0.2s ease"
@@ -472,7 +751,11 @@ const Sidebar = ({ setSelectedGroup }) => {
 
                     <Box flex="1" minW={0}>
                       <Flex align="center" justify="space-between" gap={2}>
-                        <Text fontWeight="700" color="white" noOfLines={1}>
+                        <Text
+                          fontWeight={isGroupUnread(group) ? "800" : "700"}
+                          color="white"
+                          noOfLines={1}
+                        >
                           {group.name}
                         </Text>
                         {joined && (
@@ -488,9 +771,10 @@ const Sidebar = ({ setSelectedGroup }) => {
 
                       <Text
                         fontSize="12px"
-                        color="gray.400"
+                        color={isGroupUnread(group) ? "gray.200" : "gray.400"}
                         noOfLines={2}
                         mt={1}
+                        fontWeight={isGroupUnread(group) ? "600" : "400"}
                       >
                         {group.description || "No description available"}
                       </Text>

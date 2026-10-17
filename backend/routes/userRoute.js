@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/UserModel");
 const Group = require("../models/GroupModel");
 const Message = require("../models/ChatModel");
+const { protect } = require("../middleware/authMiddleware");
 
 userRouter.post("/register", async (req, res) => {
   const { username, email, password } = req.body;
@@ -42,6 +43,27 @@ userRouter.post("/login", async (req, res) => {
     }
   } catch (err) {
     res.status(400).json({ message: err.message });
+  }
+});
+
+userRouter.get("/", protect, async (req, res) => {
+  try {
+    const users = await User.find({ _id: { $ne: req.user._id } })
+      .select("_id username email")
+      .sort({ username: 1 });
+    res.json(users);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+userRouter.get("/allUsers", protect, async (req, res) => {
+  console.log("Fetching all users");
+  try {
+    const users = await User.find().select("_id username email");
+    res.json(users);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
   }
 });
 

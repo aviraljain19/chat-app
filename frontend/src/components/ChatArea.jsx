@@ -31,7 +31,13 @@ const getStoredUser = () => {
   }
 };
 
-const ChatArea = ({ selectedGroup, socket, setSelectedGroup }) => {
+const ChatArea = ({
+  selectedGroup,
+  selectedDM,
+  socket,
+  setSelectedGroup,
+  setSelectedDM,
+}) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [connectedUsers, setConnectedUsers] = useState([]);
@@ -48,36 +54,71 @@ const ChatArea = ({ selectedGroup, socket, setSelectedGroup }) => {
     const token = currentUser?.token;
 
     try {
-      const { data } = await axios.get(
-        `https://chat-app-ochre-ten-30.vercel.app/api/messages/${selectedGroup?._id}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
+      const endpoint = selectedGroup
+        ? `https://chat-app-ochre-ten-30.vercel.app/api/messages/${selectedGroup?._id}`
+        : selectedDM
+          ? `https://chat-app-ochre-ten-30.vercel.app/api/dm/${selectedDM?._id}/messages`
+          : null;
+
+      if (!endpoint) {
+        setMessages([]);
+        return;
+      }
+
+      const { data } = await axios.get(endpoint, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setMessages(data || []);
     } catch {
       console.log("Failed to fetch messages");
     } finally {
       setIsLoadingMessages(false);
     }
-  }, [currentUser?.token, selectedGroup?._id]);
+  }, [currentUser?.token, selectedGroup?._id, selectedDM?._id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typingUsers]);
 
   useEffect(() => {
-    if (!selectedGroup || !socket) return undefined;
+    if ((!selectedGroup && !selectedDM) || !socket) return undefined;
 
     const syncMessages = async () => {
       await fetchMessages();
     };
 
     syncMessages();
-    socket.emit("join room", selectedGroup?._id);
+
+    if (selectedGroup) {
+      socket.emit("join room", selectedGroup?._id);
+    }
+
+    if (selectedDM) {
+      socket.emit("join dm", selectedDM?._id);
+    }
 
     const handleMessageReceived = (newMessageData) => {
-      setMessages((prev) => [...prev, newMessageData]);
+      setMessages((prev) => {
+        const alreadyExists = prev.some(
+          (msg) => msg?._id === newMessageData?._id,
+        );
+
+        if (alreadyExists) return prev;
+        return [...prev, newMessageData];
+      });
+      fetchMessages();
+    };
+
+    const handleDMMessageReceived = (newMessageData) => {
+      setMessages((prev) => {
+        const alreadyExists = prev.some(
+          (msg) => msg?._id === newMessageData?._id,
+        );
+
+        if (alreadyExists) return prev;
+        return [...prev, newMessageData];
+      });
+      fetchMessages();
     };
 
     const handleUsersInRoom = (users) => setConnectedUsers(users);
@@ -115,46 +156,69 @@ const ChatArea = ({ selectedGroup, socket, setSelectedGroup }) => {
     };
 
     socket.on("message received", handleMessageReceived);
+    socket.on("dm message received", handleDMMessageReceived);
     socket.on("users in room", handleUsersInRoom);
     socket.on("user joined", handleUserJoined);
     socket.on("user left", handleUserLeft);
     socket.on("notification", handleNotification);
     socket.on("user typing", handleUserTyping);
     socket.on("user stop typing", handleUserStopTyping);
+    socket.on("user typing dm", handleUserTyping);
+    socket.on("user stop typing dm", handleUserStopTyping);
 
     return () => {
-      socket.emit("leave room", selectedGroup?._id);
+      if (selectedGroup) {
+        socket.emit("leave room", selectedGroup?._id);
+      }
+      if (selectedDM) {
+        socket.emit("leave dm", selectedDM?._id);
+      }
       socket.off("message received", handleMessageReceived);
+      socket.off("dm message received", handleDMMessageReceived);
       socket.off("users in room", handleUsersInRoom);
       socket.off("user joined", handleUserJoined);
       socket.off("user left", handleUserLeft);
       socket.off("notification", handleNotification);
       socket.off("user typing", handleUserTyping);
       socket.off("user stop typing", handleUserStopTyping);
+      socket.off("user typing dm", handleUserTyping);
+      socket.off("user stop typing dm", handleUserStopTyping);
       setTypingUsers(new Set());
     };
-  }, [selectedGroup, socket, toast, fetchMessages]);
+  }, [selectedGroup, selectedDM, socket, toast, fetchMessages]);
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedGroup) return;
+    if (!newMessage.trim() || (!selectedGroup && !selectedDM)) return;
 
     try {
       const token = currentUser.token;
-      const { data } = await axios.post(
-        `https://chat-app-ochre-ten-30.vercel.app/api/messages`,
-        {
-          content: newMessage,
-          groupId: selectedGroup?._id,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
+      const endpoint = selectedGroup
+        ? "https://chat-app-ochre-ten-30.vercel.app/api/messages"
+        : "https://chat-app-ochre-ten-30.vercel.app/api/dm/" +
+          selectedDM._id +
+          "/message";
 
-      socket.emit("new message", {
-        ...data,
-        groupId: selectedGroup?._id,
+      const payload = selectedGroup
+        ? { content: newMessage, groupId: selectedGroup?._id }
+        : { content: newMessage };
+
+      const { data } = await axios.post(endpoint, payload, {
+        headers: { Authorization: `Bearer ${token}` },
       });
+
+      if (selectedGroup) {
+        socket.emit("new message", {
+          ...data,
+          groupId: selectedGroup?._id,
+        });
+      }
+
+      if (selectedDM) {
+        socket.emit("new dm message", {
+          ...data,
+          threadId: selectedDM?._id,
+        });
+      }
 
       setMessages((prev) => [...prev, data]);
       setNewMessage("");
@@ -172,25 +236,47 @@ const ChatArea = ({ selectedGroup, socket, setSelectedGroup }) => {
     const value = e.target.value;
     setNewMessage(value);
 
-    if (!selectedGroup || !socket) return;
+    if (!socket) return;
 
-    if (value.trim() && !typingTimeoutRef.current) {
-      socket.emit("typing", {
-        groupId: selectedGroup?._id,
-        username: currentUser.username,
-      });
-    }
-
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-
-    typingTimeoutRef.current = setTimeout(() => {
-      if (selectedGroup) {
-        socket.emit("stop typing", { groupId: selectedGroup?._id });
+    if (selectedGroup) {
+      if (value.trim() && !typingTimeoutRef.current) {
+        socket.emit("typing", {
+          groupId: selectedGroup?._id,
+          username: currentUser.username,
+        });
       }
-      typingTimeoutRef.current = null;
-    }, 1800);
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      typingTimeoutRef.current = setTimeout(() => {
+        if (selectedGroup) {
+          socket.emit("stop typing", { groupId: selectedGroup?._id });
+        }
+        typingTimeoutRef.current = null;
+      }, 1800);
+    }
+
+    if (selectedDM) {
+      if (value.trim() && !typingTimeoutRef.current) {
+        socket.emit("typing dm", {
+          threadId: selectedDM?._id,
+          username: currentUser.username,
+        });
+      }
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      typingTimeoutRef.current = setTimeout(() => {
+        if (selectedDM) {
+          socket.emit("stop typing dm", { threadId: selectedDM?._id });
+        }
+        typingTimeoutRef.current = null;
+      }, 1800);
+    }
   };
 
   const formatTime = (date) =>
@@ -258,10 +344,25 @@ const ChatArea = ({ selectedGroup, socket, setSelectedGroup }) => {
     );
   };
 
+  const activeConversation = selectedGroup || selectedDM;
+  const activeTitle =
+    selectedGroup?.name ||
+    (() => {
+      const otherUser = (selectedDM?.participants || []).find(
+        (participant) => participant?._id !== currentUser?._id,
+      );
+
+      return (
+        otherUser?.username ||
+        selectedDM?.otherUser?.username ||
+        "Direct message"
+      );
+    })();
+
   return (
     <Flex h="100%" w="100%" bg="brand.950" position="relative">
       <Box flex="1" display="flex" flexDirection="column" minW={0} h="100%">
-        {selectedGroup ? (
+        {activeConversation ? (
           <>
             <Flex
               px={{ base: 4, md: 6 }}
@@ -280,13 +381,20 @@ const ChatArea = ({ selectedGroup, socket, setSelectedGroup }) => {
                 variant="ghost"
                 color="gray.200"
                 icon={<FiArrowLeft />}
-                onClick={() => setSelectedGroup(null)}
+                onClick={() => {
+                  setSelectedGroup(null);
+                  setSelectedDM(null);
+                }}
               />
 
               <Avatar
-                name={selectedGroup?.name}
+                name={selectedGroup ? selectedGroup?.name : activeTitle}
                 size="md"
-                bg="linear-gradient(135deg, #4f46e5, #7c3aed)"
+                bg={
+                  selectedGroup
+                    ? "linear-gradient(135deg, #4f46e5, #7c3aed)"
+                    : "brand.500"
+                }
                 color="white"
               />
 
@@ -297,10 +405,12 @@ const ChatArea = ({ selectedGroup, socket, setSelectedGroup }) => {
                   color="white"
                   noOfLines={1}
                 >
-                  {selectedGroup?.name}
+                  {selectedGroup ? selectedGroup?.name : activeTitle}
                 </Text>
                 <Text fontSize="12px" color="gray.400">
-                  {selectedGroup?.description || "Group conversation"}
+                  {selectedGroup
+                    ? selectedGroup?.description || "Group conversation"
+                    : "Direct message"}
                 </Text>
               </Box>
 
@@ -357,8 +467,9 @@ const ChatArea = ({ selectedGroup, socket, setSelectedGroup }) => {
                     Start the conversation
                   </Text>
                   <Text color="gray.400" maxW="420px">
-                    Say hello to your team and share updates, ideas, and quick
-                    progress notes here.
+                    {selectedGroup
+                      ? "Say hello to your team and share updates, ideas, and quick progress notes here."
+                      : "Send a quick hello and start your direct conversation."}
                   </Text>
                 </Flex>
               ) : (
@@ -504,7 +615,9 @@ const ChatArea = ({ selectedGroup, socket, setSelectedGroup }) => {
                 <Input
                   value={newMessage}
                   onChange={handleTyping}
-                  placeholder="Message to #group"
+                  placeholder={
+                    selectedGroup ? "Message to #group" : "Write a message"
+                  }
                   variant="unstyled"
                   color="white"
                   resize="none"
@@ -550,8 +663,7 @@ const ChatArea = ({ selectedGroup, socket, setSelectedGroup }) => {
               Welcome to EchoSpace
             </Text>
             <Text color="gray.400" maxW="420px">
-              Select a group from the sidebar to read messages, join
-              discussions, and stay close with your team.
+              Select a group or start a direct message from the sidebar.
             </Text>
           </Flex>
         )}

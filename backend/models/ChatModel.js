@@ -11,10 +11,20 @@ const messageSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    conversationType: {
+      type: String,
+      enum: ["group", "dm"],
+      default: "group",
+    },
     group: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Group",
-      required: true,
+      default: null,
+    },
+    dmThread: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "DMThread",
+      default: null,
     },
   },
   {
