@@ -57,6 +57,16 @@ userRouter.get("/", protect, async (req, res) => {
   }
 });
 
+userRouter.get("/allUsers", protect, async (req, res) => {
+  console.log("Fetching all users");
+  try {
+    const users = await User.find().select("_id username email");
+    res.json(users);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: "30d",

@@ -6,6 +6,8 @@ const socket = (io) => {
     const user = socket.handshake.auth.user;
 
     socket.on("join room", (groupId) => {
+      if (!groupId || socket.rooms.has(groupId)) return;
+
       socket.join(groupId);
       connectedUsers.set(socket.id, { user, room: groupId, type: "group" });
       const usersInRoom = Array.from(connectedUsers.values())
@@ -32,6 +34,8 @@ const socket = (io) => {
     });
 
     socket.on("join dm", (threadId) => {
+      if (!threadId || socket.rooms.has(threadId)) return;
+
       socket.join(threadId);
       connectedUsers.set(socket.id, { user, room: threadId, type: "dm" });
     });

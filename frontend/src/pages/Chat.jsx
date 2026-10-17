@@ -4,7 +4,11 @@ import ChatArea from "../components/ChatArea";
 import { io } from "socket.io-client";
 import { useEffect, useState } from "react";
 
-const ENDPOINT = "https://chat-app-ochre-ten-30.vercel.app";
+const ENDPOINT =
+  import.meta.env.VITE_SOCKET_URL ||
+  (window.location.hostname === "localhost"
+    ? "http://localhost:5000"
+    : "https://chat-app-ochre-ten-30.vercel.app");
 
 const getStoredUser = () => {
   try {
@@ -70,6 +74,7 @@ const Chat = () => {
         backdropFilter="blur(16px)"
       >
         <Sidebar
+          socket={socket}
           setSelectedGroup={handleSelectGroup}
           setSelectedDM={handleSelectDM}
         />

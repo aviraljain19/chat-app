@@ -22,7 +22,7 @@ import {
   useToast,
 } from "@chakra-ui/react";
 import axios from "axios";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FiChevronRight,
   FiLogOut,
@@ -41,7 +41,7 @@ const getStoredUser = () => {
   }
 };
 
-const Sidebar = ({ setSelectedGroup, setSelectedDM }) => {
+const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [groups, setGroups] = useState([]);
   const [dmThreads, setDmThreads] = useState([]);
@@ -54,50 +54,37 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM }) => {
   const toast = useToast();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchGroups();
-    fetchUsers();
-    fetchDMThreads();
-  }, []);
-
   const currentUser = useMemo(() => getStoredUser(), []);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       const userInfo = getStoredUser();
       const token = userInfo?.token;
       if (!token) return;
 
       const { data } = await axios.get(
-        "https://chat-app-ochre-ten-30.vercel.app/api/users",
+        "https://chat-app-ochre-ten-30.vercel.app/api/users/allUsers",
         {
           headers: { Authorization: `Bearer ${token}` },
         },
       );
 
-      setUsers((data || []).filter((user) => user._id !== userInfo._id));
+      setUsers((data || []).filter((user) => user._id !== userInfo?._id));
     } catch (error) {
       console.log("Error fetching users:", error);
     }
-  };
+  }, []);
 
-  const fetchDMThreads = async () => {
-    try {
-      const userInfo = getStoredUser();
-      const token = userInfo?.token;
-      if (!token) return;
-
-      const { data } = await axios.get(
-        "https://chat-app-ochre-ten-30.vercel.app/api/dm/threads",
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-
-      setDmThreads(data || []);
-    } catch (error) {
-      console.log("Error fetching DM threads:", error);
-    }
+  const openDMThread = (thread) => {
+    if (!thread) return;
+    const normalizedThread = {
+      ...thread,
+      participants: Array.isArray(thread.participants)
+        ? thread.participants
+        : [],
+    };
+    setSelectedGroup(null);
+    setSelectedDM(normalizedThread);
   };
 
   const handleStartDM = async (otherUserId) => {
@@ -115,8 +102,10 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM }) => {
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
-      setSelectedDM(data);
-      setSelectedGroup(null);
+      const thread = data || null;
+      if (thread) {
+        openDMThread(thread);
+      }
       await fetchDMThreads();
     } catch (error) {
       toast({
@@ -129,7 +118,26 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM }) => {
     }
   };
 
-  const fetchGroups = async () => {
+  const fetchDMThreads = useCallback(async () => {
+    try {
+      const userInfo = getStoredUser();
+      const token = userInfo?.token;
+      if (!token) return;
+
+      const { data } = await axios.get(
+        "https://chat-app-ochre-ten-30.vercel.app/api/dm/threads",
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      setDmThreads(data || []);
+    } catch (error) {
+      console.log("Error fetching DM threads:", error);
+    }
+  }, []);
+
+  const fetchGroups = useCallback(async () => {
     try {
       const userInfo = getStoredUser();
       const token = userInfo?.token;
@@ -157,7 +165,69 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM }) => {
     } catch (error) {
       console.log("Error fetching groups:", error);
     }
-  };
+  }, [navigate]);
+
+  useEffect(() => {
+    fetchGroups();
+    fetchUsers();
+    fetchDMThreads();
+  }, [fetchGroups, fetchUsers, fetchDMThreads]);
+
+  useEffect(() => {
+    if (!socket) return undefined;
+
+    const handleRefreshSidebar = (payload) => {
+      if (payload?.groupId) {
+        socket.emit("join room", payload.groupId);
+      }
+
+      if (payload?.threadId) {
+        socket.emit("join dm", payload.threadId);
+      }
+
+      fetchGroups();
+      fetchDMThreads();
+    };
+
+    socket.on("message received", handleRefreshSidebar);
+    socket.on("dm message received", handleRefreshSidebar);
+
+    return () => {
+      socket.off("message received", handleRefreshSidebar);
+      socket.off("dm message received", handleRefreshSidebar);
+    };
+  }, [socket, fetchGroups, fetchDMThreads]);
+
+  useEffect(() => {
+    if (!socket) return undefined;
+
+    const refreshInterval = setInterval(() => {
+      fetchGroups();
+      fetchDMThreads();
+    }, 5000);
+
+    return () => clearInterval(refreshInterval);
+  }, [socket, fetchGroups, fetchDMThreads]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const refreshRooms = () => {
+      groups.forEach((group) => {
+        if (group?._id) {
+          socket.emit("join room", group._id);
+        }
+      });
+
+      dmThreads.forEach((thread) => {
+        if (thread?._id) {
+          socket.emit("join dm", thread._id);
+        }
+      });
+    };
+
+    refreshRooms();
+  }, [socket, groups, dmThreads]);
 
   const filteredGroups = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -315,6 +385,19 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM }) => {
   const handleLogout = () => {
     localStorage.removeItem("userInfo");
     navigate("/login");
+  };
+
+  const isDMUnread = (thread) => {
+    const senderId =
+      thread?.lastMessage?.sender?._id || thread?.lastMessage?.sender;
+    return !!senderId && String(senderId) !== String(currentUser?._id);
+  };
+
+  const isGroupUnread = (group) => {
+    if (!group?.lastMessage) return false;
+    const senderId =
+      group.lastMessage?.sender?._id || group.lastMessage?.sender;
+    return !!senderId && String(senderId) !== String(currentUser?._id);
   };
 
   return (
@@ -499,12 +582,20 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM }) => {
                   p={2.5}
                   borderRadius="14px"
                   border="1px solid"
-                  borderColor="whiteAlpha.100"
-                  bg="rgba(15,23,42,0.7)"
+                  borderColor={
+                    isDMUnread(thread)
+                      ? "rgba(129, 140, 248, 0.6)"
+                      : "whiteAlpha.100"
+                  }
+                  bg={
+                    isDMUnread(thread)
+                      ? "rgba(79, 70, 229, 0.12)"
+                      : "rgba(15,23,42,0.7)"
+                  }
                   cursor="pointer"
                   onClick={() => {
-                    setSelectedDM(thread);
                     setSelectedGroup(null);
+                    setSelectedDM(thread);
                   }}
                   _hover={{ bg: "rgba(79, 70, 229, 0.08)" }}
                 >
@@ -515,10 +606,19 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM }) => {
                       bg="brand.500"
                     />
                     <Box flex="1" minW={0}>
-                      <Text fontWeight="600" color="white" noOfLines={1}>
+                      <Text
+                        fontWeight={isDMUnread(thread) ? "700" : "600"}
+                        color="white"
+                        noOfLines={1}
+                      >
                         {otherUser?.username || "Direct message"}
                       </Text>
-                      <Text fontSize="11px" color="gray.400" noOfLines={1}>
+                      <Text
+                        fontSize="11px"
+                        color={isDMUnread(thread) ? "gray.200" : "gray.400"}
+                        noOfLines={1}
+                        fontWeight={isDMUnread(thread) ? "600" : "400"}
+                      >
                         {thread.lastMessage?.content || "Say hello"}
                       </Text>
                     </Box>
@@ -612,11 +712,19 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM }) => {
                   p={3}
                   borderRadius="20px"
                   bg={
-                    joined ? "rgba(79, 70, 229, 0.12)" : "rgba(15, 23, 42, 0.7)"
+                    joined
+                      ? isGroupUnread(group)
+                        ? "rgba(79, 70, 229, 0.18)"
+                        : "rgba(79, 70, 229, 0.12)"
+                      : "rgba(15, 23, 42, 0.7)"
                   }
                   border="1px solid"
                   borderColor={
-                    joined ? "rgba(129, 140, 248, 0.4)" : "whiteAlpha.100"
+                    isGroupUnread(group)
+                      ? "rgba(129, 140, 248, 0.7)"
+                      : joined
+                        ? "rgba(129, 140, 248, 0.4)"
+                        : "whiteAlpha.100"
                   }
                   cursor="pointer"
                   transition="all 0.2s ease"
@@ -643,7 +751,11 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM }) => {
 
                     <Box flex="1" minW={0}>
                       <Flex align="center" justify="space-between" gap={2}>
-                        <Text fontWeight="700" color="white" noOfLines={1}>
+                        <Text
+                          fontWeight={isGroupUnread(group) ? "800" : "700"}
+                          color="white"
+                          noOfLines={1}
+                        >
                           {group.name}
                         </Text>
                         {joined && (
@@ -659,9 +771,10 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM }) => {
 
                       <Text
                         fontSize="12px"
-                        color="gray.400"
+                        color={isGroupUnread(group) ? "gray.200" : "gray.400"}
                         noOfLines={2}
                         mt={1}
+                        fontWeight={isGroupUnread(group) ? "600" : "400"}
                       >
                         {group.description || "No description available"}
                       </Text>

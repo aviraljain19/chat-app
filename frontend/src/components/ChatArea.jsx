@@ -98,11 +98,27 @@ const ChatArea = ({
     }
 
     const handleMessageReceived = (newMessageData) => {
-      setMessages((prev) => [...prev, newMessageData]);
+      setMessages((prev) => {
+        const alreadyExists = prev.some(
+          (msg) => msg?._id === newMessageData?._id,
+        );
+
+        if (alreadyExists) return prev;
+        return [...prev, newMessageData];
+      });
+      fetchMessages();
     };
 
     const handleDMMessageReceived = (newMessageData) => {
-      setMessages((prev) => [...prev, newMessageData]);
+      setMessages((prev) => {
+        const alreadyExists = prev.some(
+          (msg) => msg?._id === newMessageData?._id,
+        );
+
+        if (alreadyExists) return prev;
+        return [...prev, newMessageData];
+      });
+      fetchMessages();
     };
 
     const handleUsersInRoom = (users) => setConnectedUsers(users);
@@ -330,14 +346,18 @@ const ChatArea = ({
 
   const activeConversation = selectedGroup || selectedDM;
   const activeTitle =
-    selectedGroup?.name || selectedDM
-      ? (() => {
-          const otherUser = (selectedDM?.participants || []).find(
-            (participant) => participant._id !== currentUser?._id,
-          );
-          return otherUser?.username || "Direct message";
-        })()
-      : "";
+    selectedGroup?.name ||
+    (() => {
+      const otherUser = (selectedDM?.participants || []).find(
+        (participant) => participant?._id !== currentUser?._id,
+      );
+
+      return (
+        otherUser?.username ||
+        selectedDM?.otherUser?.username ||
+        "Direct message"
+      );
+    })();
 
   return (
     <Flex h="100%" w="100%" bg="brand.950" position="relative">
