@@ -2,17 +2,60 @@ import {
   Avatar,
   Badge,
   Box,
+  Button,
   Flex,
   Icon,
+  Input,
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalHeader,
+  ModalOverlay,
   Text,
   Tooltip,
   VStack,
+  useDisclosure,
+  useToast,
 } from "@chakra-ui/react";
-import { FiCircle, FiUsers } from "react-icons/fi";
+import axios from "axios";
+import { useMemo, useState } from "react";
+import {
+  FiCircle,
+  FiEdit2,
+  FiPlus,
+  FiShield,
+  FiTrash2,
+  FiUsers,
+} from "react-icons/fi";
 
 const normalizeId = (value) => String(value ?? "").trim();
 
-const UsersList = ({ users = [], selectedGroup = null }) => {
+const getStoredUser = () => {
+  try {
+    const storedUser = localStorage.getItem("userInfo");
+    return storedUser ? JSON.parse(storedUser) : null;
+  } catch {
+    return null;
+  }
+};
+
+const UsersList = ({
+  users = [],
+  selectedGroup = null,
+  onGroupUpdated,
+  onGroupDeleted,
+}) => {
+  const toast = useToast();
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const [inviteUserId, setInviteUserId] = useState("");
+  const [groupName, setGroupName] = useState(selectedGroup?.name || "");
+  const [groupDescription, setGroupDescription] = useState(
+    selectedGroup?.description || "",
+  );
+  const currentUser = useMemo(() => getStoredUser(), []);
+  const isAdmin = selectedGroup?.admin?._id === currentUser?._id;
+
   const memberList = selectedGroup?.members?.length
     ? selectedGroup.members
     : users || [];
@@ -21,6 +64,116 @@ const UsersList = ({ users = [], selectedGroup = null }) => {
       normalizeId(onlineUser?._id || onlineUser?.id || onlineUser?.userId),
     ),
   );
+
+  const handleGroupAction = async (endpoint, payload, successMessage) => {
+    if (!selectedGroup?._id) return;
+
+    try {
+      const token = currentUser?.token;
+      if (!token) return;
+
+      await axios.post(
+        `https://chat-app-ochre-ten-30.vercel.app/api/groups/${selectedGroup._id}${endpoint}`,
+        payload,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      toast({
+        title: successMessage,
+        status: "success",
+        duration: 2500,
+        isClosable: true,
+      });
+
+      onGroupUpdated?.();
+    } catch (error) {
+      toast({
+        title: "Action failed",
+        description: error.response?.data?.message || "Something went wrong",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const handleDeleteGroup = async () => {
+    if (!selectedGroup?._id) return;
+
+    try {
+      const token = currentUser?.token;
+      if (!token) return;
+
+      await axios.delete(
+        `https://chat-app-ochre-ten-30.vercel.app/api/groups/${selectedGroup._id}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      toast({
+        title: "Group deleted",
+        status: "success",
+        duration: 2500,
+        isClosable: true,
+      });
+
+      onGroupDeleted?.();
+    } catch (error) {
+      toast({
+        title: "Delete failed",
+        description: error.response?.data?.message || "Something went wrong",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const handleRenameGroup = async () => {
+    if (!groupName.trim()) {
+      toast({
+        title: "Group name required",
+        status: "warning",
+        duration: 2500,
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      const token = currentUser?.token;
+      if (!token) return;
+
+      await axios.put(
+        `https://chat-app-ochre-ten-30.vercel.app/api/groups/${selectedGroup._id}/rename`,
+        {
+          name: groupName,
+          description: groupDescription,
+        },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      toast({
+        title: "Group updated",
+        status: "success",
+        duration: 2500,
+        isClosable: true,
+      });
+      onGroupUpdated?.();
+      onClose();
+    } catch (error) {
+      toast({
+        title: "Update failed",
+        description: error.response?.data?.message || "Something went wrong",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
 
   return (
     <Box
@@ -60,6 +213,68 @@ const UsersList = ({ users = [], selectedGroup = null }) => {
         </Badge>
       </Flex>
 
+      {/* Admin Controls */}
+      {isAdmin && (
+        <Box p={4} borderBottom="1px solid" borderColor="whiteAlpha.200">
+          <Flex gap={2} mb={3}>
+            <Input
+              value={inviteUserId}
+              onChange={(e) => setInviteUserId(e.target.value)}
+              placeholder="User ID to invite"
+              bg="whiteAlpha.50"
+              borderColor="whiteAlpha.200"
+              color="white"
+              size="sm"
+            />
+            <Button
+              leftIcon={<FiPlus />}
+              colorScheme="brand"
+              size="sm"
+              onClick={() => {
+                if (!inviteUserId.trim()) {
+                  toast({
+                    title: "User ID required",
+                    status: "warning",
+                    duration: 2000,
+                    isClosable: true,
+                  });
+                  return;
+                }
+                handleGroupAction(
+                  "/invite",
+                  { userId: inviteUserId },
+                  "User invited",
+                );
+                setInviteUserId("");
+              }}
+            >
+              Invite
+            </Button>
+          </Flex>
+
+          <Flex gap={2} wrap="wrap">
+            <Button
+              leftIcon={<FiEdit2 />}
+              variant="ghost"
+              colorScheme="brand"
+              size="sm"
+              onClick={onOpen}
+            >
+              Rename group
+            </Button>
+            <Button
+              leftIcon={<FiTrash2 />}
+              variant="ghost"
+              colorScheme="red"
+              size="sm"
+              onClick={handleDeleteGroup}
+            >
+              Delete group
+            </Button>
+          </Flex>
+        </Box>
+      )}
+
       {/* Users List */}
       <Box flex="1" overflowY="auto" p={4}>
         {memberList.length === 0 ? (
@@ -84,6 +299,7 @@ const UsersList = ({ users = [], selectedGroup = null }) => {
                 user?._id || user?.id || user?.userId,
               );
               const isOnline = onlineUserIds.has(memberId);
+              const isGroupAdmin = selectedGroup?.admin?._id === memberId;
 
               return (
                 <Box key={memberId || user?.email || user?.username}>
@@ -100,7 +316,11 @@ const UsersList = ({ users = [], selectedGroup = null }) => {
                       bg="rgba(17, 24, 39, 0.9)"
                       borderRadius="18px"
                       borderWidth="1px"
-                      borderColor="whiteAlpha.100"
+                      borderColor={
+                        isGroupAdmin
+                          ? "rgba(129, 140, 248, 0.8)"
+                          : "whiteAlpha.100"
+                      }
                       align="center"
                       gap={3}
                       _hover={{
@@ -132,6 +352,47 @@ const UsersList = ({ users = [], selectedGroup = null }) => {
                           {user.email || "Group member"}
                         </Text>
                       </Box>
+
+                      {isGroupAdmin && (
+                        <Badge colorScheme="purple" borderRadius="full" px={2}>
+                          Admin
+                        </Badge>
+                      )}
+
+                      {isAdmin && !isGroupAdmin && (
+                        <Flex gap={1}>
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            colorScheme="purple"
+                            leftIcon={<FiShield />}
+                            onClick={() =>
+                              handleGroupAction(
+                                "/promote-admin",
+                                { userId: memberId },
+                                "Admin promoted",
+                              )
+                            }
+                          >
+                            Promote
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            colorScheme="red"
+                            leftIcon={<FiTrash2 />}
+                            onClick={() =>
+                              handleGroupAction(
+                                "/remove-member",
+                                { userId: memberId },
+                                "Member removed",
+                              )
+                            }
+                          >
+                            Remove
+                          </Button>
+                        </Flex>
+                      )}
 
                       <Flex
                         align="center"
@@ -166,6 +427,43 @@ const UsersList = ({ users = [], selectedGroup = null }) => {
           </VStack>
         )}
       </Box>
+
+      {/* Rename Group Modal */}
+      <Modal isOpen={isOpen} onClose={onClose} isCentered>
+        <ModalOverlay bg="blackAlpha.600" backdropFilter="blur(8px)" />
+        <ModalContent
+          bg="gray.900"
+          border="1px solid"
+          borderColor="whiteAlpha.200"
+          borderRadius="20px"
+        >
+          <ModalHeader color="white">Rename group</ModalHeader>
+          <ModalCloseButton color="gray.300" />
+          <ModalBody pb={6}>
+            <VStack spacing={4} align="stretch">
+              <Input
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                placeholder="Group name"
+                bg="whiteAlpha.50"
+                borderColor="whiteAlpha.200"
+                color="white"
+              />
+              <Input
+                value={groupDescription}
+                onChange={(e) => setGroupDescription(e.target.value)}
+                placeholder="Group description"
+                bg="whiteAlpha.50"
+                borderColor="whiteAlpha.200"
+                color="white"
+              />
+              <Button colorScheme="brand" onClick={handleRenameGroup}>
+                Save changes
+              </Button>
+            </VStack>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 };

@@ -49,6 +49,31 @@ const ChatArea = ({
 
   const currentUser = useMemo(() => getStoredUser(), []);
 
+  const refreshSelectedGroup = useCallback(async () => {
+    if (!selectedGroup?._id) return;
+
+    try {
+      const token = currentUser?.token;
+      if (!token) return;
+
+      const { data } = await axios.get(
+        `https://chat-app-ochre-ten-30.vercel.app/api/groups`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      const updatedGroup = (data || []).find(
+        (group) => group._id === selectedGroup._id,
+      );
+      if (updatedGroup) {
+        setSelectedGroup(updatedGroup);
+      }
+    } catch {
+      console.log("Failed to refresh selected group");
+    }
+  }, [currentUser?.token, selectedGroup?._id]);
+
   const fetchMessages = useCallback(async () => {
     setIsLoadingMessages(true);
     const token = currentUser?.token;
@@ -678,7 +703,15 @@ const ChatArea = ({
         bg="rgba(15, 23, 42, 0.88)"
       >
         {selectedGroup && (
-          <UsersList users={connectedUsers} selectedGroup={selectedGroup} />
+          <UsersList
+            users={connectedUsers}
+            selectedGroup={selectedGroup}
+            onGroupUpdated={refreshSelectedGroup}
+            onGroupDeleted={() => {
+              setSelectedGroup(null);
+              setSelectedDM(null);
+            }}
+          />
         )}
       </Box>
     </Flex>
