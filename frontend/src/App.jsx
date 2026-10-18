@@ -1,9 +1,8 @@
 import { ChakraProvider, extendTheme } from "@chakra-ui/react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { SignedIn, SignedOut, RedirectToSignIn } from "@clerk/clerk-react";
 import Login from "./pages/Login";
-import Register from "./pages/Register";
 import Chat from "./pages/Chat";
-import PrivateRoute from "./components/PrivateRoute";
 import LandingPage from "./pages/LandingPage";
 
 const theme = extendTheme({
@@ -53,13 +52,17 @@ function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
           <Route
             path="/chat"
             element={
-              <PrivateRoute>
-                <Chat />
-              </PrivateRoute>
+              <>
+                <SignedIn>
+                  <Chat />
+                </SignedIn>
+                <SignedOut>
+                  <RedirectToSignIn redirectUrl="/chat" />
+                </SignedOut>
+              </>
             }
           />
         </Routes>

@@ -18,7 +18,17 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: true,
+      required: false,
+      default: null,
+    },
+    authProvider: {
+      type: String,
+      enum: ["clerk", "local"],
+      default: "clerk",
+    },
+    clerkUserId: {
+      type: String,
+      default: null,
     },
     isAdmin: {
       type: Boolean,
@@ -31,7 +41,7 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) {
+  if (!this.isModified("password") || !this.password) {
     return next();
   }
   try {
@@ -44,6 +54,7 @@ userSchema.pre("save", async function (next) {
 });
 
 userSchema.methods.comparePassword = async function (candidatePassword) {
+  if (!this.password) return false;
   return await bcrypt.compare(candidatePassword, this.password);
 };
 

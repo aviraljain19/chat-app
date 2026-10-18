@@ -1,64 +1,94 @@
 const express = require("express");
 const userRouter = express.Router();
 const jwt = require("jsonwebtoken");
+const { createClerkClient } = require("@clerk/clerk-sdk-node");
 const User = require("../models/UserModel");
-const Group = require("../models/GroupModel");
-const Message = require("../models/ChatModel");
 const { protect } = require("../middleware/authMiddleware");
 
-userRouter.post("/register", async (req, res) => {
-  const { username, email, password } = req.body;
-  try {
-    const userExists = await User.findOne({ email });
-    if (userExists) {
-      return res.status(400).json({ message: "User already exists" });
-    }
-    const user = await User.create({ username, email, password });
-    if (user) {
-      res
-        .status(201)
-        .json({ _id: user._id, username: user.username, email: user.email });
-    }
-  } catch (err) {
-    res.status(400).json({ message: err.message });
-  }
+const clerkClient = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY,
 });
 
-userRouter.post("/login", async (req, res) => {
-  const { email, password } = req.body;
+userRouter.post("/clerk-session", async (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const clerkToken = authHeader.startsWith("Bearer ")
+    ? authHeader.replace("Bearer ", "").trim()
+    : "";
+
+  if (!clerkToken) {
+    return res.status(401).json({ message: "Missing Clerk token" });
+  }
+
   try {
-    const user = await User.findOne({ email });
-    if (user && (await user.comparePassword(password))) {
-      res.json({
-        user: {
-          _id: user._id,
-          username: user.username,
-          email: user.email,
-          isAdmin: user.isAdmin,
-          token: generateToken(user._id),
-        },
+    const claims = await clerkClient.verifyToken(clerkToken);
+    const clerkUserId = claims.sub;
+
+    const clerkUser = await clerkClient.users.getUser(clerkUserId);
+    const primaryEmail =
+      clerkUser.emailAddresses?.find(
+        (email) => email.id === clerkUser.primaryEmailAddressId,
+      )?.emailAddress ||
+      clerkUser.emailAddresses?.[0]?.emailAddress ||
+      "";
+
+    if (!primaryEmail) {
+      return res.status(400).json({ message: "Verified email is required" });
+    }
+
+    let dbUser = await User.findOne({ email: primaryEmail.toLowerCase() });
+
+    if (!dbUser) {
+      const usernameBase = (
+        clerkUser.firstName ||
+        clerkUser.username ||
+        "clerk-user"
+      )
+        .toString()
+        .trim();
+
+      const baseName = usernameBase || "clerk-user";
+      let username = baseName;
+      let suffix = 1;
+
+      while (await User.findOne({ username })) {
+        username = `${baseName}${suffix}`;
+        suffix += 1;
+      }
+
+      dbUser = await User.create({
+        username,
+        email: primaryEmail.toLowerCase(),
+        password: null,
+        authProvider: "clerk",
+        clerkUserId,
       });
     } else {
-      res.status(401).json({ message: "Invalid email or password" });
+      dbUser.clerkUserId = clerkUserId;
+      dbUser.authProvider = "clerk";
+      dbUser.username = dbUser.username || clerkUser.username || "clerk-user";
+      await dbUser.save();
     }
-  } catch (err) {
-    res.status(400).json({ message: err.message });
-  }
-});
 
-userRouter.get("/", protect, async (req, res) => {
-  try {
-    const users = await User.find({ _id: { $ne: req.user._id } })
-      .select("_id username email")
-      .sort({ username: 1 });
-    res.json(users);
+    const appToken = generateToken(dbUser._id);
+
+    return res.json({
+      user: {
+        _id: dbUser._id,
+        username: dbUser.username,
+        email: dbUser.email,
+        isAdmin: dbUser.isAdmin,
+        token: appToken,
+      },
+    });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error("Clerk session invalid:", error);
+    return res
+      .status(401)
+      .json({ message: "Invalid or expired Google session" });
   }
 });
 
 userRouter.get("/allUsers", protect, async (req, res) => {
-  console.log("Fetching all users");
   try {
     const users = await User.find().select("_id username email");
     res.json(users);
