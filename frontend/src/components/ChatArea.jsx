@@ -56,12 +56,9 @@ const ChatArea = ({
       const token = currentUser?.token;
       if (!token) return;
 
-      const { data } = await axios.get(
-        `https://chat-app-ochre-ten-30.vercel.app/api/groups`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
+      const { data } = await axios.get(`http://localhost:5000/api/groups`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       const updatedGroup = (data || []).find(
         (group) => group._id === selectedGroup._id,
@@ -80,9 +77,9 @@ const ChatArea = ({
 
     try {
       const endpoint = selectedGroup
-        ? `https://chat-app-ochre-ten-30.vercel.app/api/messages/${selectedGroup?._id}`
+        ? `http://localhost:5000/api/messages/${selectedGroup?._id}`
         : selectedDM
-          ? `https://chat-app-ochre-ten-30.vercel.app/api/dm/${selectedDM?._id}/messages`
+          ? `http://localhost:5000/api/dm/${selectedDM?._id}/messages`
           : null;
 
       if (!endpoint) {
@@ -218,10 +215,8 @@ const ChatArea = ({
     try {
       const token = currentUser.token;
       const endpoint = selectedGroup
-        ? "https://chat-app-ochre-ten-30.vercel.app/api/messages"
-        : "https://chat-app-ochre-ten-30.vercel.app/api/dm/" +
-          selectedDM._id +
-          "/message";
+        ? "http://localhost:5000/api/messages"
+        : "http://localhost:5000/api/dm/" + selectedDM._id + "/message";
 
       const payload = selectedGroup
         ? { content: newMessage, groupId: selectedGroup?._id }

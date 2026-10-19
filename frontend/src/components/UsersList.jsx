@@ -73,7 +73,7 @@ const UsersList = ({
       if (!token) return;
 
       await axios.post(
-        `https://chat-app-ochre-ten-30.vercel.app/api/groups/${selectedGroup._id}${endpoint}`,
+        `http://localhost:5000/api/groups/${selectedGroup._id}${endpoint}`,
         payload,
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -107,7 +107,7 @@ const UsersList = ({
       if (!token) return;
 
       await axios.delete(
-        `https://chat-app-ochre-ten-30.vercel.app/api/groups/${selectedGroup._id}`,
+        `http://localhost:5000/api/groups/${selectedGroup._id}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -148,7 +148,7 @@ const UsersList = ({
       if (!token) return;
 
       await axios.put(
-        `https://chat-app-ochre-ten-30.vercel.app/api/groups/${selectedGroup._id}/rename`,
+        `http://localhost:5000/api/groups/${selectedGroup._id}/rename`,
         {
           name: groupName,
           description: groupDescription,

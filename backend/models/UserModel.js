@@ -20,6 +20,12 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    clerkId: {
+      type: String,
+      default: null,
+      unique: true,
+      sparse: true,
+    },
     isAdmin: {
       type: Boolean,
       default: false,

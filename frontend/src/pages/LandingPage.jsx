@@ -13,6 +13,7 @@ import {
   HStack,
   Badge,
 } from "@chakra-ui/react";
+import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/react";
 import { Link as RouterLink } from "react-router-dom";
 import {
   FiMessageSquare,
@@ -104,7 +105,6 @@ const ChatMessage = ({ message, sender, time, isUser }) => {
 export default function LandingPage() {
   return (
     <Box bg={useColorModeValue("gray.50", "gray.900")} minH="100vh">
-      {/* Hero Section */}
       <Container maxW="7xl" pt={10}>
         <Stack
           align="center"
@@ -175,9 +175,35 @@ export default function LandingPage() {
                 Sign In
               </Button>
             </Stack>
+            <Stack direction={{ base: "column", sm: "row" }} spacing={3}>
+              <Show when="signed-out">
+                <SignInButton mode="modal">
+                  <Button rounded="full" size="lg" variant="outline">
+                    Continue with Clerk
+                  </Button>
+                </SignInButton>
+                <SignUpButton mode="modal">
+                  <Button rounded="full" size="lg" colorScheme="blue">
+                    Create account with Clerk
+                  </Button>
+                </SignUpButton>
+              </Show>
+              <Show when="signed-in">
+                <Button
+                  as={RouterLink}
+                  to="/chat"
+                  rounded="full"
+                  size="lg"
+                  colorScheme="blue"
+                  leftIcon={<FiMessageSquare />}
+                >
+                  Open chat
+                </Button>
+                <UserButton afterSignOutUrl="/" />
+              </Show>
+            </Stack>
           </Stack>
 
-          {/* Chat Preview */}
           <Flex
             flex={1}
             justify="center"

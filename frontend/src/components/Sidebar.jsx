@@ -63,13 +63,14 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
       if (!token) return;
 
       const { data } = await axios.get(
-        "https://chat-app-ochre-ten-30.vercel.app/api/users/allUsers",
+        "http://localhost:5000/api/users/allUsers",
         {
           headers: { Authorization: `Bearer ${token}` },
         },
       );
 
       setUsers((data || []).filter((user) => user._id !== userInfo?._id));
+      console.log("Fetched users:", data);
     } catch (error) {
       console.log("Error fetching users:", error);
     }
@@ -97,7 +98,7 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
       }
 
       const { data } = await axios.post(
-        "https://chat-app-ochre-ten-30.vercel.app/api/dm/thread",
+        "http://localhost:5000/api/dm/thread",
         { userId: otherUserId },
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -124,12 +125,9 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
       const token = userInfo?.token;
       if (!token) return;
 
-      const { data } = await axios.get(
-        "https://chat-app-ochre-ten-30.vercel.app/api/dm/threads",
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
+      const { data } = await axios.get("http://localhost:5000/api/dm/threads", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       setDmThreads(data || []);
     } catch (error) {
@@ -146,14 +144,11 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
         return;
       }
 
-      const { data } = await axios.get(
-        "https://chat-app-ochre-ten-30.vercel.app/api/groups",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+      const { data } = await axios.get("http://localhost:5000/api/groups", {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-      );
+      });
 
       setGroups(data || []);
       const userGroupIds = (data || [])
@@ -269,7 +264,7 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
       }
 
       await axios.post(
-        "https://chat-app-ochre-ten-30.vercel.app/api/groups",
+        "http://localhost:5000/api/groups",
         {
           name: newGroupName,
           description: newGroupDescription,
@@ -313,7 +308,7 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
       }
 
       await axios.post(
-        `https://chat-app-ochre-ten-30.vercel.app/api/groups/${groupId}/join`,
+        `http://localhost:5000/api/groups/${groupId}/join`,
         {},
         {
           headers: {
@@ -353,7 +348,7 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
       }
 
       await axios.post(
-        `https://chat-app-ochre-ten-30.vercel.app/api/groups/${groupId}/leave`,
+        `http://localhost:5000/api/groups/${groupId}/leave`,
         {},
         {
           headers: {
@@ -384,7 +379,7 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
 
   const handleLogout = () => {
     localStorage.removeItem("userInfo");
-    navigate("/login");
+    navigate("/");
   };
 
   const isDMUnread = (thread) => {

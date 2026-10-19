@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const http = require("http");
 const socketio = require("socket.io");
 const cors = require("cors");
+const { clerkMiddleware } = require("@clerk/express");
 const userRouter = require("./routes/userRoute");
 const socketIo = require("./socket");
 const groupRouter = require("./routes/groupRoute");
@@ -13,17 +14,44 @@ dotenv.config();
 
 const app = express();
 
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:3000",
+  "http://localhost:4173",
+];
+
 const server = http.createServer(app);
 const io = socketio(server, {
   cors: {
-    origin: "*",
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("CORS not allowed"));
+      }
+    },
     methods: ["GET", "POST"],
     credentials: true,
   },
 });
 
-app.use(cors());
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("CORS not allowed"));
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
 app.use(express.json());
+app.use(clerkMiddleware());
 
 const PORT = process.env.PORT || 5000;
 
@@ -45,7 +73,8 @@ mongoose.connection.on("connected", () => {
 });
 
 mongoose.connection.on("error", (err) => {
-  console.error("MongoDB connection error:", err.message);
+  console.error("MongoDB connection error:");
+  console.error(err.message);
 });
 
 mongoose.connection.on("disconnected", () => {

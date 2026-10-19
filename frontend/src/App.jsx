@@ -1,10 +1,11 @@
 import { ChakraProvider, extendTheme } from "@chakra-ui/react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
 import Chat from "./pages/Chat";
 import PrivateRoute from "./components/PrivateRoute";
 import LandingPage from "./pages/LandingPage";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import ProfileSetup from "./pages/ProfileSetup";
 
 const theme = extendTheme({
   fonts: {
@@ -54,6 +55,7 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/setup-profile" element={<ProfileSetup />} />
           <Route
             path="/chat"
             element={

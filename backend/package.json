@@ -9,6 +9,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@clerk/express": "^2.1.80",
     "bcryptjs": "^3.0.3",
     "cores": "^0.8.5",
     "dotenv": "^17.4.1",
