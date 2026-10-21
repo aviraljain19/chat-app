@@ -12,7 +12,7 @@ const normalizeParticipants = (userAId, userBId) => {
 dmRouter.get("/threads", protect, async (req, res) => {
   try {
     const threads = await DMThread.find({ participants: req.user._id })
-      .populate("participants", "_id username email")
+      .populate("participants", "_id username email name")
       .populate("lastMessage")
       .sort({ updatedAt: -1 });
 
@@ -41,7 +41,7 @@ dmRouter.post("/thread", protect, async (req, res) => {
     }
 
     const populatedThread = await DMThread.findById(thread._id)
-      .populate("participants", "_id username email")
+      .populate("participants", "_id username email name")
       .populate("lastMessage");
 
     res.status(201).json(populatedThread);
@@ -68,7 +68,7 @@ dmRouter.get("/:threadId/messages", protect, async (req, res) => {
     }
 
     const messages = await Message.find({ dmThread: req.params.threadId })
-      .populate("sender", "_id username email")
+      .populate("sender", "_id username email name")
       .sort({ createdAt: 1 });
 
     res.json(messages);
@@ -108,7 +108,7 @@ dmRouter.post("/:threadId/message", protect, async (req, res) => {
 
     const populatedMessage = await Message.findById(message._id).populate(
       "sender",
-      "_id username email",
+      "_id username email name",
     );
 
     res.status(201).json(populatedMessage);

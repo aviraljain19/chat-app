@@ -10,6 +10,7 @@ import {
   VStack,
   useToast,
 } from "@chakra-ui/react";
+import { useAuth } from "@clerk/react";
 import axios from "axios";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -46,8 +47,16 @@ const ChatArea = ({
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const toast = useToast();
+  const { getToken } = useAuth();
 
   const currentUser = useMemo(() => getStoredUser(), []);
+
+  const getAuthHeaders = async (fallbackToken) => {
+    const clerkToken = await getToken().catch(() => null);
+    return {
+      Authorization: `Bearer ${clerkToken || fallbackToken}`,
+    };
+  };
 
   const refreshSelectedGroup = useCallback(async () => {
     if (!selectedGroup?._id) return;
@@ -56,9 +65,14 @@ const ChatArea = ({
       const token = currentUser?.token;
       if (!token) return;
 
-      const { data } = await axios.get(`http://localhost:5000/api/groups`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const headers = await getAuthHeaders(token);
+      const { data } = await axios.get(
+        `https://chat-app-ochre-ten-30.vercel.app/api/groups`,
+        {
+          headers,
+          withCredentials: true,
+        },
+      );
 
       const updatedGroup = (data || []).find(
         (group) => group._id === selectedGroup._id,
@@ -69,7 +83,7 @@ const ChatArea = ({
     } catch {
       console.log("Failed to refresh selected group");
     }
-  }, [currentUser?.token, selectedGroup?._id]);
+  }, [currentUser?.token, selectedGroup?._id, getToken]);
 
   const fetchMessages = useCallback(async () => {
     setIsLoadingMessages(true);
@@ -77,9 +91,9 @@ const ChatArea = ({
 
     try {
       const endpoint = selectedGroup
-        ? `http://localhost:5000/api/messages/${selectedGroup?._id}`
+        ? `https://chat-app-ochre-ten-30.vercel.app/api/messages/${selectedGroup?._id}`
         : selectedDM
-          ? `http://localhost:5000/api/dm/${selectedDM?._id}/messages`
+          ? `https://chat-app-ochre-ten-30.vercel.app/api/dm/${selectedDM?._id}/messages`
           : null;
 
       if (!endpoint) {
@@ -87,8 +101,10 @@ const ChatArea = ({
         return;
       }
 
+      const headers = await getAuthHeaders(token);
       const { data } = await axios.get(endpoint, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers,
+        withCredentials: true,
       });
       setMessages(data || []);
     } catch {
@@ -96,7 +112,7 @@ const ChatArea = ({
     } finally {
       setIsLoadingMessages(false);
     }
-  }, [currentUser?.token, selectedGroup?._id, selectedDM?._id]);
+  }, [currentUser?.token, selectedGroup?._id, selectedDM?._id, getToken]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -215,15 +231,19 @@ const ChatArea = ({
     try {
       const token = currentUser.token;
       const endpoint = selectedGroup
-        ? "http://localhost:5000/api/messages"
-        : "http://localhost:5000/api/dm/" + selectedDM._id + "/message";
+        ? "https://chat-app-ochre-ten-30.vercel.app/api/messages"
+        : "https://chat-app-ochre-ten-30.vercel.app/api/dm/" +
+          selectedDM._id +
+          "/message";
 
       const payload = selectedGroup
         ? { content: newMessage, groupId: selectedGroup?._id }
         : { content: newMessage };
 
+      const headers = await getAuthHeaders(token);
       const { data } = await axios.post(endpoint, payload, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers,
+        withCredentials: true,
       });
 
       if (selectedGroup) {
@@ -262,7 +282,7 @@ const ChatArea = ({
       if (value.trim() && !typingTimeoutRef.current) {
         socket.emit("typing", {
           groupId: selectedGroup?._id,
-          username: currentUser.username,
+          username: currentUser.name,
         });
       }
 
@@ -282,7 +302,7 @@ const ChatArea = ({
       if (value.trim() && !typingTimeoutRef.current) {
         socket.emit("typing dm", {
           threadId: selectedDM?._id,
-          username: currentUser.username,
+          username: currentUser.name,
         });
       }
 
@@ -371,12 +391,8 @@ const ChatArea = ({
       const otherUser = (selectedDM?.participants || []).find(
         (participant) => participant?._id !== currentUser?._id,
       );
-
-      return (
-        otherUser?.username ||
-        selectedDM?.otherUser?.username ||
-        "Direct message"
-      );
+      console.log(selectedDM, otherUser);
+      return otherUser?.name || selectedDM?.otherUser?.name || "Direct message";
     })();
 
   return (
@@ -535,7 +551,7 @@ const ChatArea = ({
                             >
                               {isCurrentUser
                                 ? "You"
-                                : message.sender?.username || "Member"}
+                                : message.sender?.name || "Member"}
                             </Text>
                           )}
 
@@ -543,7 +559,7 @@ const ChatArea = ({
                             {!isCurrentUser && !isSequence && (
                               <Avatar
                                 size="xs"
-                                name={message.sender?.username || "Member"}
+                                name={message.sender?.name || "Member"}
                                 bg="gray.700"
                               />
                             )}
@@ -577,7 +593,7 @@ const ChatArea = ({
                             {isCurrentUser && !isSequence && (
                               <Avatar
                                 size="xs"
-                                name={currentUser?.username || "You"}
+                                name={currentUser?.name || "You"}
                                 bg="brand.500"
                               />
                             )}

@@ -7,33 +7,39 @@ const protect = async (req, res, next) => {
 
   const clerkAuth = getAuth(req);
   const clerkUserId = clerkAuth?.userId;
+  const sessionEmail =
+    clerkAuth?.sessionClaims?.email ||
+    clerkAuth?.sessionClaims?.primaryEmail ||
+    clerkAuth?.sessionClaims?.user?.email ||
+    null;
 
-  if (clerkUserId) {
+  if (clerkUserId || sessionEmail) {
     try {
-      const clerkUser = await User.findOne({
-        email: `${clerkUserId}@clerk.local`,
-      });
-      if (clerkUser) {
-        req.user = clerkUser;
-        return next();
+      let clerkUser = null;
+
+      if (clerkUserId) {
+        clerkUser = await User.findOne({ clerkId: clerkUserId }).lean();
       }
 
-      const fallbackUser = await User.findOne({
-        email: clerkAuth?.sessionClaims?.email,
-      });
-      if (fallbackUser) {
-        req.user = fallbackUser;
-        return next();
+      if (!clerkUser && sessionEmail) {
+        clerkUser = await User.findOne({
+          email: String(sessionEmail).toLowerCase(),
+        }).lean();
       }
 
-      const createdUser = await User.create({
-        username:
-          clerkAuth.sessionClaims?.username || `clerk-${clerkUserId.slice(-6)}`,
-        email: `${clerkUserId}@clerk.local`,
-        password: `clerk-${clerkUserId}`,
-      });
+      if (!clerkUser && clerkUserId) {
+        clerkUser = await User.findOne({
+          email: `${clerkUserId}@clerk.local`,
+        }).lean();
+      }
 
-      req.user = createdUser;
+      if (!clerkUser) {
+        return res.status(401).json({
+          message: "User not synced yet. Please sign in again.",
+        });
+      }
+
+      req.user = clerkUser;
       return next();
     } catch (error) {
       return res
@@ -50,15 +56,18 @@ const protect = async (req, res, next) => {
       token = req.headers.authorization.split(" ")[1];
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       req.user = await User.findById(decoded.id).select("-password");
+
+      if (!req.user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+
       return next();
     } catch (error) {
       return res.status(401).json({ message: "Not authorized, token failed" });
     }
   }
 
-  if (!token) {
-    return res.status(401).json({ message: "Not authorized, no token" });
-  }
+  return res.status(401).json({ message: "Not authorized, no token" });
 };
 
 const isAdmin = (req, res, next) => {

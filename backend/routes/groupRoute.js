@@ -6,8 +6,8 @@ const { protect } = require("../middleware/authMiddleware");
 
 const populateGroup = (query) =>
   query
-    .populate("admin", "username email")
-    .populate("members", "username email");
+    .populate("admin", "username email name")
+    .populate("members", "username email name");
 
 const ensureAdmin = (group, userId) => {
   if (!group || !group.admin) {

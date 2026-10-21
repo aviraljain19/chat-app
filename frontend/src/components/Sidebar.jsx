@@ -21,6 +21,7 @@ import {
   useDisclosure,
   useToast,
 } from "@chakra-ui/react";
+import { useAuth, useClerk } from "@clerk/react";
 import axios from "axios";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -53,8 +54,17 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
   const [activeFilter, setActiveFilter] = useState("all");
   const toast = useToast();
   const navigate = useNavigate();
-
+  const { signOut, session } = useClerk();
+  const { getToken } = useAuth();
   const currentUser = useMemo(() => getStoredUser(), []);
+
+  const getAuthHeaders = async (fallbackToken) => {
+    const clerkToken = await getToken().catch(() => null);
+    const token = clerkToken || fallbackToken;
+    return {
+      Authorization: `Bearer ${token}`,
+    };
+  };
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -62,19 +72,20 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
       const token = userInfo?.token;
       if (!token) return;
 
+      const headers = await getAuthHeaders(token);
       const { data } = await axios.get(
-        "http://localhost:5000/api/users/allUsers",
+        "https://chat-app-ochre-ten-30.vercel.app/api/users/allUsers",
         {
-          headers: { Authorization: `Bearer ${token}` },
+          headers,
+          withCredentials: true,
         },
       );
 
       setUsers((data || []).filter((user) => user._id !== userInfo?._id));
-      console.log("Fetched users:", data);
     } catch (error) {
       console.log("Error fetching users:", error);
     }
-  }, []);
+  }, [getToken]);
 
   const openDMThread = (thread) => {
     if (!thread) return;
@@ -97,10 +108,11 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
         return;
       }
 
+      const headers = await getAuthHeaders(token);
       const { data } = await axios.post(
-        "http://localhost:5000/api/dm/thread",
+        "https://chat-app-ochre-ten-30.vercel.app/api/dm/thread",
         { userId: otherUserId },
-        { headers: { Authorization: `Bearer ${token}` } },
+        { headers, withCredentials: true },
       );
 
       const thread = data || null;
@@ -125,15 +137,20 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
       const token = userInfo?.token;
       if (!token) return;
 
-      const { data } = await axios.get("http://localhost:5000/api/dm/threads", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const headers = await getAuthHeaders(token);
+      const { data } = await axios.get(
+        "https://chat-app-ochre-ten-30.vercel.app/api/dm/threads",
+        {
+          headers,
+          withCredentials: true,
+        },
+      );
 
       setDmThreads(data || []);
     } catch (error) {
       console.log("Error fetching DM threads:", error);
     }
-  }, []);
+  }, [getToken]);
 
   const fetchGroups = useCallback(async () => {
     try {
@@ -144,11 +161,14 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
         return;
       }
 
-      const { data } = await axios.get("http://localhost:5000/api/groups", {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const headers = await getAuthHeaders(token);
+      const { data } = await axios.get(
+        "https://chat-app-ochre-ten-30.vercel.app/api/groups",
+        {
+          headers,
+          withCredentials: true,
         },
-      });
+      );
 
       setGroups(data || []);
       const userGroupIds = (data || [])
@@ -160,7 +180,7 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
     } catch (error) {
       console.log("Error fetching groups:", error);
     }
-  }, [navigate]);
+  }, [getToken, navigate]);
 
   useEffect(() => {
     fetchGroups();
@@ -263,16 +283,16 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
         return;
       }
 
+      const headers = await getAuthHeaders(token);
       await axios.post(
-        "http://localhost:5000/api/groups",
+        "https://chat-app-ochre-ten-30.vercel.app/api/groups",
         {
           name: newGroupName,
           description: newGroupDescription,
         },
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers,
+          withCredentials: true,
         },
       );
 
@@ -307,13 +327,13 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
         return;
       }
 
+      const headers = await getAuthHeaders(token);
       await axios.post(
-        `http://localhost:5000/api/groups/${groupId}/join`,
+        `https://chat-app-ochre-ten-30.vercel.app/api/groups/${groupId}/join`,
         {},
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers,
+          withCredentials: true,
         },
       );
 
@@ -347,13 +367,13 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
         return;
       }
 
+      const headers = await getAuthHeaders(token);
       await axios.post(
-        `http://localhost:5000/api/groups/${groupId}/leave`,
+        `https://chat-app-ochre-ten-30.vercel.app/api/groups/${groupId}/leave`,
         {},
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers,
+          withCredentials: true,
         },
       );
 
@@ -377,7 +397,11 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await signOut({
+      sessionId: session?.id,
+      redirectUrl: "/login",
+    });
     localStorage.removeItem("userInfo");
     navigate("/");
   };
@@ -503,7 +527,7 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
         </Flex>
       </Box>
 
-      <Box p={4} pb={0}>
+      {/* <Box p={4} pb={0}>
         <Flex
           align="center"
           gap={3}
@@ -514,14 +538,14 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
           p={3}
         >
           <Avatar
-            name={currentUser?.username || "You"}
+            name={currentUser?.name || "You"}
             size="md"
             bg="linear-gradient(135deg, #4f46e5, #8b5cf6)"
             color="white"
           />
           <Box flex="1" minW={0}>
             <Text fontSize="sm" fontWeight="700" color="white" noOfLines={1}>
-              {currentUser?.username || "User"}
+              {currentUser?.name || "User"}
             </Text>
             <Flex align="center" gap={2} mt={0.5}>
               <Box
@@ -547,136 +571,7 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
             Exit
           </Button>
         </Flex>
-      </Box>
-
-      <Box p={4} pb={0}>
-        <Text
-          fontSize="xs"
-          color="gray.400"
-          fontWeight="700"
-          letterSpacing="0.08em"
-          textTransform="uppercase"
-          mb={2}
-        >
-          Direct messages
-        </Text>
-        <VStack spacing={2} align="stretch">
-          {dmThreads.length === 0 ? (
-            <Text fontSize="12px" color="gray.400">
-              No private chats yet
-            </Text>
-          ) : (
-            dmThreads.map((thread) => {
-              const otherUser = (thread.participants || []).find(
-                (participant) => participant._id !== currentUser?._id,
-              );
-
-              return (
-                <Box
-                  key={thread._id}
-                  p={2.5}
-                  borderRadius="14px"
-                  border="1px solid"
-                  borderColor={
-                    isDMUnread(thread)
-                      ? "rgba(129, 140, 248, 0.6)"
-                      : "whiteAlpha.100"
-                  }
-                  bg={
-                    isDMUnread(thread)
-                      ? "rgba(79, 70, 229, 0.12)"
-                      : "rgba(15,23,42,0.7)"
-                  }
-                  cursor="pointer"
-                  onClick={() => {
-                    setSelectedGroup(null);
-                    setSelectedDM(thread);
-                  }}
-                  _hover={{ bg: "rgba(79, 70, 229, 0.08)" }}
-                >
-                  <Flex align="center" gap={3}>
-                    <Avatar
-                      size="sm"
-                      name={otherUser?.username || "User"}
-                      bg="brand.500"
-                    />
-                    <Box flex="1" minW={0}>
-                      <Text
-                        fontWeight={isDMUnread(thread) ? "700" : "600"}
-                        color="white"
-                        noOfLines={1}
-                      >
-                        {otherUser?.username || "Direct message"}
-                      </Text>
-                      <Text
-                        fontSize="11px"
-                        color={isDMUnread(thread) ? "gray.200" : "gray.400"}
-                        noOfLines={1}
-                        fontWeight={isDMUnread(thread) ? "600" : "400"}
-                      >
-                        {thread.lastMessage?.content || "Say hello"}
-                      </Text>
-                    </Box>
-                  </Flex>
-                </Box>
-              );
-            })
-          )}
-        </VStack>
-      </Box>
-
-      <Box p={4} pb={0}>
-        <Text
-          fontSize="xs"
-          color="gray.400"
-          fontWeight="700"
-          letterSpacing="0.08em"
-          textTransform="uppercase"
-          mb={2}
-        >
-          People
-        </Text>
-        <VStack spacing={2} align="stretch">
-          {users.length === 0 ? (
-            <Text fontSize="12px" color="gray.400">
-              No other users found
-            </Text>
-          ) : (
-            users.map((user) => (
-              <Flex
-                key={user._id}
-                align="center"
-                justify="space-between"
-                p={2.5}
-                borderRadius="14px"
-                border="1px solid"
-                borderColor="whiteAlpha.100"
-                bg="rgba(15,23,42,0.7)"
-              >
-                <Flex align="center" gap={3} minW={0}>
-                  <Avatar size="sm" name={user.username} bg="gray.700" />
-                  <Box minW={0}>
-                    <Text fontWeight="600" color="white" noOfLines={1}>
-                      {user.username}
-                    </Text>
-                    <Text fontSize="11px" color="gray.400" noOfLines={1}>
-                      {user.email}
-                    </Text>
-                  </Box>
-                </Flex>
-                <Button
-                  size="xs"
-                  colorScheme="brand"
-                  onClick={() => handleStartDM(user._id)}
-                >
-                  Message
-                </Button>
-              </Flex>
-            ))
-          )}
-        </VStack>
-      </Box>
-
+      </Box> */}
       <Box flex="1" overflowY="auto" px={4} py={4}>
         <VStack spacing={3} align="stretch">
           {filteredGroups.length === 0 ? (
@@ -816,6 +711,134 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
                 </Box>
               );
             })
+          )}
+        </VStack>
+      </Box>
+
+      <Box p={4} pb={0}>
+        <Text
+          fontSize="xs"
+          color="gray.400"
+          fontWeight="700"
+          letterSpacing="0.08em"
+          textTransform="uppercase"
+          mb={2}
+        >
+          Direct messages
+        </Text>
+        <VStack spacing={2} align="stretch">
+          {dmThreads.length === 0 ? (
+            <Text fontSize="12px" color="gray.400">
+              No private chats yet
+            </Text>
+          ) : (
+            dmThreads.map((thread) => {
+              const otherUser = (thread.participants || []).find(
+                (participant) => participant._id !== currentUser?._id,
+              );
+
+              return (
+                <Box
+                  key={thread._id}
+                  p={2.5}
+                  borderRadius="14px"
+                  border="1px solid"
+                  borderColor={
+                    isDMUnread(thread)
+                      ? "rgba(129, 140, 248, 0.6)"
+                      : "whiteAlpha.100"
+                  }
+                  bg={
+                    isDMUnread(thread)
+                      ? "rgba(79, 70, 229, 0.12)"
+                      : "rgba(15,23,42,0.7)"
+                  }
+                  cursor="pointer"
+                  onClick={() => {
+                    setSelectedGroup(null);
+                    setSelectedDM(thread);
+                  }}
+                  _hover={{ bg: "rgba(79, 70, 229, 0.08)" }}
+                >
+                  <Flex align="center" gap={3}>
+                    <Avatar
+                      size="sm"
+                      name={otherUser?.name || "User"}
+                      bg="brand.500"
+                    />
+                    <Box flex="1" minW={0}>
+                      <Text
+                        fontWeight={isDMUnread(thread) ? "700" : "600"}
+                        color="white"
+                        noOfLines={1}
+                      >
+                        {otherUser?.name || "Direct message"}
+                      </Text>
+                      <Text
+                        fontSize="11px"
+                        color={isDMUnread(thread) ? "gray.200" : "gray.400"}
+                        noOfLines={1}
+                        fontWeight={isDMUnread(thread) ? "600" : "400"}
+                      >
+                        {thread.lastMessage?.content || "Say hello"}
+                      </Text>
+                    </Box>
+                  </Flex>
+                </Box>
+              );
+            })
+          )}
+        </VStack>
+      </Box>
+
+      <Box p={4} pb={0}>
+        <Text
+          fontSize="xs"
+          color="gray.400"
+          fontWeight="700"
+          letterSpacing="0.08em"
+          textTransform="uppercase"
+          mb={2}
+        >
+          People
+        </Text>
+        <VStack spacing={2} align="stretch">
+          {users.length === 0 ? (
+            <Text fontSize="12px" color="gray.400">
+              No other users found
+            </Text>
+          ) : (
+            users.map((user) => (
+              <Flex
+                key={user._id}
+                align="center"
+                justify="space-between"
+                p={2.5}
+                borderRadius="14px"
+                border="1px solid"
+                borderColor="whiteAlpha.100"
+                bg="rgba(15,23,42,0.7)"
+              >
+                <Flex align="center" gap={3} minW={0}>
+                  <Avatar size="sm" name={user.name} bg="gray.700" />
+                  <Box minW={0}>
+                    <Text fontWeight="600" color="white" noOfLines={1}>
+                      {user.name}
+                    </Text>
+                    <Text fontSize="11px" color="gray.400" noOfLines={1}>
+                      {user.email}
+                    </Text>
+                  </Box>
+                </Flex>
+                <Button
+                  size="xs"
+                  colorScheme="brand"
+                  onClick={() => handleStartDM(user._id)}
+                >
+                  Message
+                </Button>
+              </Flex>
+            ))
           )}
         </VStack>
       </Box>

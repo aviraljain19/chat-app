@@ -175,7 +175,7 @@ export default function LandingPage() {
                 Sign In
               </Button>
             </Stack>
-            <Stack direction={{ base: "column", sm: "row" }} spacing={3}>
+            {/* <Stack direction={{ base: "column", sm: "row" }} spacing={3}>
               <Show when="signed-out">
                 <SignInButton mode="modal">
                   <Button rounded="full" size="lg" variant="outline">
@@ -201,7 +201,7 @@ export default function LandingPage() {
                 </Button>
                 <UserButton afterSignOutUrl="/" />
               </Show>
-            </Stack>
+            </Stack> */}
           </Stack>
 
           <Flex

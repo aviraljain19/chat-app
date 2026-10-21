@@ -5,7 +5,12 @@ import {
   Button,
   Flex,
   Icon,
+  IconButton,
   Input,
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuList,
   Modal,
   ModalBody,
   ModalCloseButton,
@@ -18,11 +23,13 @@ import {
   useDisclosure,
   useToast,
 } from "@chakra-ui/react";
+import { useAuth } from "@clerk/react";
 import axios from "axios";
 import { useMemo, useState } from "react";
 import {
   FiCircle,
   FiEdit2,
+  FiMoreVertical,
   FiPlus,
   FiShield,
   FiTrash2,
@@ -54,8 +61,9 @@ const UsersList = ({
     selectedGroup?.description || "",
   );
   const currentUser = useMemo(() => getStoredUser(), []);
+  const { getToken } = useAuth();
   const isAdmin = selectedGroup?.admin?._id === currentUser?._id;
-
+  console.log(selectedGroup?.members);
   const memberList = selectedGroup?.members?.length
     ? selectedGroup.members
     : users || [];
@@ -65,6 +73,13 @@ const UsersList = ({
     ),
   );
 
+  const getAuthHeaders = async (fallbackToken) => {
+    const clerkToken = await getToken().catch(() => null);
+    return {
+      Authorization: `Bearer ${clerkToken || fallbackToken}`,
+    };
+  };
+
   const handleGroupAction = async (endpoint, payload, successMessage) => {
     if (!selectedGroup?._id) return;
 
@@ -72,11 +87,13 @@ const UsersList = ({
       const token = currentUser?.token;
       if (!token) return;
 
+      const headers = await getAuthHeaders(token);
       await axios.post(
-        `http://localhost:5000/api/groups/${selectedGroup._id}${endpoint}`,
+        `https://chat-app-ochre-ten-30.vercel.app/api/groups/${selectedGroup._id}${endpoint}`,
         payload,
         {
-          headers: { Authorization: `Bearer ${token}` },
+          headers,
+          withCredentials: true,
         },
       );
 
@@ -106,10 +123,12 @@ const UsersList = ({
       const token = currentUser?.token;
       if (!token) return;
 
+      const headers = await getAuthHeaders(token);
       await axios.delete(
-        `http://localhost:5000/api/groups/${selectedGroup._id}`,
+        `https://chat-app-ochre-ten-30.vercel.app/api/groups/${selectedGroup._id}`,
         {
-          headers: { Authorization: `Bearer ${token}` },
+          headers,
+          withCredentials: true,
         },
       );
 
@@ -147,13 +166,14 @@ const UsersList = ({
       const token = currentUser?.token;
       if (!token) return;
 
+      const headers = await getAuthHeaders(token);
       await axios.put(
-        `http://localhost:5000/api/groups/${selectedGroup._id}/rename`,
+        `https://chat-app-ochre-ten-30.vercel.app/api/groups/${selectedGroup._id}/rename`,
         {
           name: groupName,
           description: groupDescription,
         },
-        { headers: { Authorization: `Bearer ${token}` } },
+        { headers, withCredentials: true },
       );
 
       toast({
@@ -306,8 +326,8 @@ const UsersList = ({
                   <Tooltip
                     label={
                       isOnline
-                        ? `${user.username} is online`
-                        : `${user.username} is offline`
+                        ? `${user.name} is online`
+                        : `${user.name} is offline`
                     }
                     placement="left"
                   >
@@ -330,7 +350,7 @@ const UsersList = ({
                     >
                       <Avatar
                         size="sm"
-                        name={user.username}
+                        name={user.name}
                         bg={
                           isOnline
                             ? "linear-gradient(135deg, #4f46e5, #8b5cf6)"
@@ -346,7 +366,7 @@ const UsersList = ({
                           color="white"
                           noOfLines={1}
                         >
-                          {user.username}
+                          {user.name}
                         </Text>
                         <Text fontSize="11px" color="gray.400">
                           {user.email || "Group member"}
@@ -359,42 +379,56 @@ const UsersList = ({
                         </Badge>
                       )}
 
-                      {isAdmin && !isGroupAdmin && (
-                        <Flex gap={1}>
-                          <Button
-                            size="xs"
+                      {!isGroupAdmin && isAdmin && (
+                        <Menu placement="bottom-end">
+                          <MenuButton
+                            as={IconButton}
+                            aria-label="Member actions"
+                            icon={<Icon as={FiMoreVertical} />}
                             variant="ghost"
-                            colorScheme="purple"
-                            leftIcon={<FiShield />}
-                            onClick={() =>
-                              handleGroupAction(
-                                "/promote-admin",
-                                { userId: memberId },
-                                "Admin promoted",
-                              )
-                            }
+                            size="sm"
+                            color="gray.300"
+                            _hover={{ bg: "whiteAlpha.100", color: "white" }}
+                            _focus={{ bg: "whiteAlpha.100", boxShadow: "none" }}
+                          />
+                          <MenuList
+                            bgColor="gray.900"
+                            borderColor="whiteAlpha.200"
+                            minW="160px"
+                            zIndex={10}
                           >
-                            Promote
-                          </Button>
-                          <Button
-                            size="xs"
-                            variant="ghost"
-                            colorScheme="red"
-                            leftIcon={<FiTrash2 />}
-                            onClick={() =>
-                              handleGroupAction(
-                                "/remove-member",
-                                { userId: memberId },
-                                "Member removed",
-                              )
-                            }
-                          >
-                            Remove
-                          </Button>
-                        </Flex>
+                            <MenuItem
+                              bgColor="gray.900"
+                              icon={<FiShield />}
+                              onClick={() =>
+                                handleGroupAction(
+                                  "/promote-admin",
+                                  { userId: memberId },
+                                  "Admin promoted",
+                                )
+                              }
+                            >
+                              Promote
+                            </MenuItem>
+                            <MenuItem
+                              bgColor="gray.900"
+                              icon={<FiTrash2 />}
+                              color="red.300"
+                              onClick={() =>
+                                handleGroupAction(
+                                  "/remove-member",
+                                  { userId: memberId },
+                                  "Member removed",
+                                )
+                              }
+                            >
+                              Remove
+                            </MenuItem>
+                          </MenuList>
+                        </Menu>
                       )}
 
-                      <Flex
+                      {/* <Flex
                         align="center"
                         bg={
                           isOnline
@@ -418,7 +452,7 @@ const UsersList = ({
                         >
                           {isOnline ? "online" : "offline"}
                         </Text>
-                      </Flex>
+                      </Flex> */}
                     </Flex>
                   </Tooltip>
                 </Box>

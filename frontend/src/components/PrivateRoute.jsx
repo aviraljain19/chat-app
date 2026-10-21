@@ -8,7 +8,6 @@ const PrivateRoute = ({ children }) => {
   const { user } = useUser();
   const [isSyncing, setIsSyncing] = useState(true);
   const [didSync, setDidSync] = useState(false);
-
   useEffect(() => {
     if (!isLoaded) return;
 
@@ -20,52 +19,58 @@ const PrivateRoute = ({ children }) => {
     }
 
     const syncClerkUser = async () => {
-      setIsSyncing(true);
+      try {
+        setIsSyncing(true);
 
-      const maxRetries = 4;
-      let attempt = 0;
-      let lastError = null;
+        const token = await getToken().catch(() => null);
+        const payload = {
+          clerkUserId: user?.id || null,
+          email:
+            user?.primaryEmailAddress?.emailAddress ||
+            user?.emailAddresses?.[0]?.emailAddress ||
+            null,
+          username:
+            user?.username ||
+            user?.firstName ||
+            `clerk-${user?.id?.slice(-6)}` ||
+            "clerk-user",
+          name: user?.firstName || user?.lastName || null,
+        };
 
-      while (attempt < maxRetries) {
-        try {
-          const token = await getToken().catch(() => null);
+        const response = await axios.post(
+          "https://chat-app-ochre-ten-30.vercel.app/api/users/sync-clerk-user",
+          payload,
+          {
+            withCredentials: true,
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          },
+        );
 
-          if (!token) {
-            lastError = new Error("No clerk token available");
-            break;
-          }
-
-          // try syncing using the server endpoint (server will validate Clerk token)
-          const { data } = await axios.post(
-            "http://localhost:5000/api/users/sync-clerk-user",
-            {},
-            {
-              headers: token ? { Authorization: `Bearer ${token}` } : {},
-            },
+        localStorage.setItem("userInfo", JSON.stringify(response?.data?.user));
+      } catch (error) {
+        console.error("Clerk sync failed:", error);
+        if (user) {
+          localStorage.setItem(
+            "userInfo",
+            JSON.stringify({
+              _id: user.id,
+              username:
+                user.username || user.firstName || `clerk-${user.id.slice(-6)}`,
+              email:
+                user.primaryEmailAddress?.emailAddress ||
+                user.emailAddresses?.[0]?.emailAddress ||
+                `${user.id}@clerk.local`,
+              isAdmin: false,
+              token: "offline-clerk-session",
+            }),
           );
-
-          if (data?.user) {
-            localStorage.setItem("userInfo", JSON.stringify(data.user));
-            lastError = null;
-            break;
-          }
-        } catch (err) {
-          lastError = err;
-          const backoff = Math.pow(2, attempt) * 500;
-          // eslint-disable-next-line no-await-in-loop
-          await new Promise((r) => setTimeout(r, backoff));
+        } else {
+          localStorage.removeItem("userInfo");
         }
-
-        attempt += 1;
+      } finally {
+        setIsSyncing(false);
+        setDidSync(true);
       }
-
-      if (lastError) {
-        console.error("Clerk sync failed after retries:", lastError);
-        localStorage.removeItem("userInfo");
-      }
-
-      setIsSyncing(false);
-      setDidSync(true);
     };
 
     syncClerkUser();
@@ -75,23 +80,7 @@ const PrivateRoute = ({ children }) => {
   if (!isSignedIn) return <Navigate to="/" replace />;
   if (!didSync) return null;
 
-  // If the synced user doesn't have a chosen username (or has a fallback like 'clerk-...'),
-  // redirect them to the profile setup page before allowing access to protected routes.
-  try {
-    const stored = localStorage.getItem("userInfo");
-    if (stored) {
-      const u = JSON.parse(stored);
-      const uname = u?.username || "";
-      if (!uname || /^clerk-/i.test(uname)) {
-        return <Navigate to="/setup-profile" replace />;
-      }
-    }
-  } catch (e) {
-    // ignore parse errors and continue
-  }
-
   return children;
 };
 
 export default PrivateRoute;
-

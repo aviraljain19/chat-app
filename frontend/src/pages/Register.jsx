@@ -18,7 +18,14 @@ const Register = () => {
       px={4}
       py={10}
     >
-      <Box w="full" maxW="900px">
+      <Box
+        w="full"
+        maxW="900px"
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
+        flexDirection="column"
+      >
         <Text
           fontSize="2xl"
           fontWeight="700"
@@ -32,7 +39,7 @@ const Register = () => {
           path="/register"
           routing="path"
           signInUrl="/login"
-          afterSignUpUrl="/chat"
+          forceRedirectUrl="/chat"
         />
       </Box>
     </Box>

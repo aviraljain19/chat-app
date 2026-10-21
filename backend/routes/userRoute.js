@@ -8,6 +8,7 @@ const Message = require("../models/ChatModel");
 const { protect } = require("../middleware/authMiddleware");
 
 userRouter.post("/register", async (req, res) => {
+  console.log("Registering user with data:", req.body);
   const { username, email, password } = req.body;
   try {
     const userExists = await User.findOne({ email });
@@ -61,7 +62,7 @@ userRouter.get("/", protect, async (req, res) => {
 userRouter.get("/allUsers", protect, async (req, res) => {
   console.log("Fetching all users");
   try {
-    const users = await User.find().select("_id username email");
+    const users = await User.find().select("_id username email name");
     res.json(users);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -70,6 +71,7 @@ userRouter.get("/allUsers", protect, async (req, res) => {
 
 userRouter.post("/sync-clerk-user", async (req, res) => {
   const clerkAuth = getAuth(req);
+  console.log("sync auth", req.body);
   const suppliedId = req.body?.clerkUserId;
   const suppliedEmail = req.body?.email;
   const suppliedUsername = req.body?.username;
@@ -79,6 +81,12 @@ userRouter.post("/sync-clerk-user", async (req, res) => {
     suppliedEmail ||
     clerkAuth?.sessionClaims?.email ||
     (clerkUserId ? `${clerkUserId}@clerk.local` : null);
+
+  console.log("Syncing Clerk user:", {
+    clerkUserId,
+    clerkEmail,
+    suppliedUsername,
+  });
 
   if (!clerkUserId && !clerkEmail) {
     return res.status(401).json({ message: "Not authenticated" });
@@ -94,17 +102,19 @@ userRouter.post("/sync-clerk-user", async (req, res) => {
     }
 
     if (!user) {
-      const usernameBase =
-        suppliedUsername ||
-        clerkAuth?.sessionClaims?.firstName ||
-        clerkAuth?.sessionClaims?.username ||
-        `clerk-${clerkUserId ? clerkUserId.slice(-6) : "user"}`;
-
+      const usernameBase = `clerk-${clerkUserId ? clerkUserId.slice(-6) : "user"}`;
+      console.log(
+        "Creating new user with username:",
+        usernameBase,
+        suppliedUsername,
+        clerkEmail,
+      );
       user = await User.create({
         clerkId: clerkUserId,
         username: usernameBase || "clerk-user",
         email: String(clerkEmail).toLowerCase(),
         password: `clerk-${clerkUserId || String(Date.now())}`,
+        name: suppliedUsername || null,
       });
     } else {
       const updates = {};
@@ -124,6 +134,7 @@ userRouter.post("/sync-clerk-user", async (req, res) => {
     const safeUser = {
       _id: user._id,
       username: user.username,
+      name: user.name || null,
       email: user.email,
       isAdmin: user.isAdmin,
       token: generateToken(user._id),
@@ -142,62 +153,3 @@ const generateToken = (id) => {
 };
 
 module.exports = userRouter;
-
-// Update profile (first-time username selection)
-userRouter.patch('/profile', async (req, res) => {
-  const { username } = req.body;
-  if (!username || !String(username).trim()) {
-    return res.status(400).json({ message: 'Username is required' });
-  }
-
-  try {
-    const clerkAuth = getAuth(req);
-    const clerkUserId = clerkAuth?.userId;
-
-    let user = null;
-
-    if (clerkUserId) {
-      user = await User.findOne({ clerkId: clerkUserId });
-      if (!user && clerkAuth?.sessionClaims?.email) {
-        user = await User.findOne({ email: clerkAuth.sessionClaims.email.toLowerCase() });
-      }
-    }
-
-    // Fallback to JWT if Clerk session not present
-    if (!user && req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-      try {
-        const token = req.headers.authorization.split(' ')[1];
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        user = await User.findById(decoded.id);
-      } catch (err) {
-        // ignore, will handle below
-      }
-    }
-
-    if (!user) {
-      return res.status(401).json({ message: 'Not authenticated' });
-    }
-
-    // Ensure username is unique (case-insensitive)
-    const existing = await User.findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
-    if (existing && String(existing._id) !== String(user._id)) {
-      return res.status(400).json({ message: 'Username already taken' });
-    }
-
-    user.username = String(username).trim();
-    await user.save();
-
-    const safeUser = {
-      _id: user._id,
-      username: user.username,
-      email: user.email,
-      isAdmin: user.isAdmin,
-      token: generateToken(user._id),
-    };
-
-    return res.json({ user: safeUser });
-  } catch (error) {
-    return res.status(400).json({ message: error.message });
-  }
-});
-
