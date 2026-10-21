@@ -54,8 +54,21 @@ const theme = extendTheme({
 
 function ClerkWithNavigate({ children }) {
   const navigate = useNavigate();
+  const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+  if (!publishableKey) {
+    console.error(
+      "Missing VITE_CLERK_PUBLISHABLE_KEY. Add it in your Vercel project environment variables.",
+    );
+    return children;
+  }
+
   return (
-    <ClerkProvider afterSignOutUrl="/" navigate={(to) => navigate(to)}>
+    <ClerkProvider
+      publishableKey={publishableKey}
+      afterSignOutUrl="/"
+      navigate={(to) => navigate(to)}
+    >
       {children}
     </ClerkProvider>
   );
