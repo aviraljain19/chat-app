@@ -1,4 +1,4 @@
-import { Box, Flex } from "@chakra-ui/react";
+import { Box, Flex, useBreakpointValue } from "@chakra-ui/react";
 import Sidebar from "../components/Sidebar";
 import ChatArea from "../components/ChatArea";
 import { io } from "socket.io-client";
@@ -23,6 +23,11 @@ const Chat = () => {
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [selectedDM, setSelectedDM] = useState(null);
   const [socket, setSocket] = useState(null);
+  const isMobile = useBreakpointValue({ base: true, md: false });
+
+  const hasActiveConversation = Boolean(selectedGroup || selectedDM);
+  const showSidebar = !isMobile || !hasActiveConversation;
+  const showChat = !isMobile || hasActiveConversation;
 
   const handleSelectGroup = (group) => {
     setSelectedGroup(group);
@@ -51,54 +56,60 @@ const Chat = () => {
 
   return (
     <Flex
-      h="100vh"
-      w="100vw"
-      maxW="100vw"
+      h="100dvh"
+      w="100%"
+      maxW="100%"
       bg="brand.950"
       color="white"
       direction={{ base: "column", md: "row" }}
       overflow="hidden"
       border="none"
+      sx={{
+        WebkitTapHighlightColor: "transparent",
+      }}
     >
-      <Box
-        w={{ base: "100%", md: "360px" }}
-        minW={{ base: "100%", md: "360px" }}
-        h={{ base: selectedGroup || selectedDM ? "0" : "100%", md: "100vh" }}
-        display={{
-          base: selectedGroup || selectedDM ? "none" : "flex",
-          md: "flex",
-        }}
-        borderRight="1px solid"
-        borderColor="whiteAlpha.200"
-        bg="rgba(15, 23, 42, 0.75)"
-        backdropFilter="blur(16px)"
-      >
-        <Sidebar
-          socket={socket}
-          setSelectedGroup={handleSelectGroup}
-          setSelectedDM={handleSelectDM}
-        />
-      </Box>
-      <Box
-        flex="1"
-        minW={0}
-        w="100%"
-        display={{
-          base: selectedGroup || selectedDM ? "flex" : "flex",
-          md: "flex",
-        }}
-        bg="brand.950"
-      >
-        {socket && (
-          <ChatArea
-            selectedGroup={selectedGroup}
-            selectedDM={selectedDM}
+      {showSidebar && (
+        <Box
+          w={{ base: "100%", md: "360px" }}
+          minW={{ base: "100%", md: "360px" }}
+          h={{ base: "100%", md: "100vh" }}
+          display="flex"
+          borderRight={{ base: "none", md: "1px solid" }}
+          borderColor="whiteAlpha.200"
+          bg="rgba(15, 23, 42, 0.75)"
+          backdropFilter="blur(16px)"
+          overflow="hidden"
+          maxW="100%"
+        >
+          <Sidebar
             socket={socket}
-            setSelectedGroup={setSelectedGroup}
-            setSelectedDM={setSelectedDM}
+            setSelectedGroup={handleSelectGroup}
+            setSelectedDM={handleSelectDM}
           />
-        )}
-      </Box>
+        </Box>
+      )}
+
+      {showChat && (
+        <Box
+          flex="1"
+          minW={0}
+          w="100%"
+          maxW="100%"
+          display="flex"
+          bg="brand.950"
+          overflow="hidden"
+        >
+          {socket && (
+            <ChatArea
+              selectedGroup={selectedGroup}
+              selectedDM={selectedDM}
+              socket={socket}
+              setSelectedGroup={setSelectedGroup}
+              setSelectedDM={setSelectedDM}
+            />
+          )}
+        </Box>
+      )}
     </Flex>
   );
 };

@@ -391,24 +391,24 @@ const ChatArea = ({
       const otherUser = (selectedDM?.participants || []).find(
         (participant) => participant?._id !== currentUser?._id,
       );
-      console.log(selectedDM, otherUser);
       return otherUser?.name || selectedDM?.otherUser?.name || "Direct message";
     })();
 
   return (
-    <Flex h="100%" w="100%" bg="brand.950" position="relative">
+    <Flex h="100%" w="100%" bg="brand.950" position="relative" minW={0}>
       <Box flex="1" display="flex" flexDirection="column" minW={0} h="100%">
         {activeConversation ? (
           <>
             <Flex
-              px={{ base: 4, md: 6 }}
-              py={4}
+              px={{ base: 3, md: 6 }}
+              py={{ base: 3, md: 4 }}
               bg="rgba(15, 23, 42, 0.7)"
               borderBottom="1px solid"
               borderColor="whiteAlpha.100"
               align="center"
               gap={3}
               backdropFilter="blur(12px)"
+              minW={0}
             >
               <IconButton
                 display={{ base: "flex", md: "none" }}
@@ -425,7 +425,7 @@ const ChatArea = ({
 
               <Avatar
                 name={selectedGroup ? selectedGroup?.name : activeTitle}
-                size="md"
+                size={{ base: "sm", md: "md" }}
                 bg={
                   selectedGroup
                     ? "linear-gradient(135deg, #4f46e5, #7c3aed)"
@@ -436,21 +436,21 @@ const ChatArea = ({
 
               <Box flex="1" minW={0}>
                 <Text
-                  fontSize="lg"
+                  fontSize={{ base: "md", md: "lg" }}
                   fontWeight="700"
                   color="white"
                   noOfLines={1}
                 >
                   {selectedGroup ? selectedGroup?.name : activeTitle}
                 </Text>
-                <Text fontSize="12px" color="gray.400">
+                <Text fontSize="12px" color="gray.400" noOfLines={1}>
                   {selectedGroup
                     ? selectedGroup?.description || "Group conversation"
                     : "Direct message"}
                 </Text>
               </Box>
 
-              <Flex align="center" gap={2}>
+              <Flex align="center" gap={2} flexShrink={0}>
                 <IconButton
                   aria-label="Search in conversation"
                   variant="ghost"
@@ -478,6 +478,7 @@ const ChatArea = ({
               px={{ base: 3, md: 6 }}
               py={{ base: 4, md: 6 }}
               bg="rgba(9, 15, 29, 0.7)"
+              minW={0}
             >
               {isLoadingMessages ? (
                 <Flex align="center" justify="center" h="100%" color="gray.300">
@@ -491,7 +492,7 @@ const ChatArea = ({
                   justify="center"
                   h="100%"
                   textAlign="center"
-                  px={8}
+                  px={4}
                 >
                   <Box
                     as={FiMessageCircle}
@@ -499,7 +500,12 @@ const ChatArea = ({
                     color="gray.600"
                     mb={4}
                   />
-                  <Text fontSize="2xl" fontWeight="700" color="white" mb={2}>
+                  <Text
+                    fontSize={{ base: "xl", md: "2xl" }}
+                    fontWeight="700"
+                    color="white"
+                    mb={2}
+                  >
                     Start the conversation
                   </Text>
                   <Text color="gray.400" maxW="420px">
@@ -510,7 +516,7 @@ const ChatArea = ({
                 </Flex>
               ) : (
                 Object.entries(messageGroups).map(([dateKey, dayMessages]) => (
-                  <Box key={dateKey}>
+                  <Box key={dateKey} minW={0}>
                     <Flex align="center" my={3} justify="center">
                       <Box flex="1" height="1px" bg="whiteAlpha.200" />
                       <Text
@@ -540,6 +546,7 @@ const ChatArea = ({
                           align={isCurrentUser ? "flex-end" : "flex-start"}
                           mb={3}
                           maxW="100%"
+                          minW={0}
                         >
                           {!isSequence && (
                             <Text
@@ -555,7 +562,12 @@ const ChatArea = ({
                             </Text>
                           )}
 
-                          <Flex align="center" gap={2} maxW="75%">
+                          <Flex
+                            align="center"
+                            gap={2}
+                            maxW={{ base: "85%", md: "75%" }}
+                            minW={0}
+                          >
                             {!isCurrentUser && !isSequence && (
                               <Avatar
                                 size="xs"
@@ -565,8 +577,8 @@ const ChatArea = ({
                             )}
 
                             <Box
-                              px={4}
-                              py={3}
+                              px={{ base: 3, md: 4 }}
+                              py={{ base: 2.5, md: 3 }}
                               borderRadius="20px"
                               bg={
                                 isCurrentUser
@@ -584,6 +596,8 @@ const ChatArea = ({
                                   : "none"
                               }
                               wordBreak="break-word"
+                              overflowWrap="anywhere"
+                              minW={0}
                             >
                               <Text lineHeight="1.5" whiteSpace="pre-wrap">
                                 {message.content}
@@ -628,17 +642,19 @@ const ChatArea = ({
               borderTop="1px solid"
               borderColor="whiteAlpha.100"
               px={{ base: 3, md: 5 }}
-              py={4}
+              py={{ base: 3, md: 4 }}
+              pb={{ base: "calc(env(safe-area-inset-bottom) + 12px)", md: 4 }}
             >
               <Flex
                 align="center"
-                gap={3}
+                gap={{ base: 2, md: 3 }}
                 bg="rgba(17, 24, 39, 0.9)"
                 border="1px solid"
                 borderColor="whiteAlpha.100"
                 borderRadius="18px"
-                px={3}
-                py={2}
+                px={{ base: 2, md: 3 }}
+                py={{ base: 2, md: 2 }}
+                minW={0}
               >
                 <IconButton
                   aria-label="Emoji picker"
@@ -657,6 +673,8 @@ const ChatArea = ({
                   variant="unstyled"
                   color="white"
                   resize="none"
+                  flex="1"
+                  minW={0}
                   _placeholder={{ color: "gray.500" }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
@@ -668,11 +686,12 @@ const ChatArea = ({
                 <Button
                   colorScheme="brand"
                   borderRadius="12px"
-                  px={4}
+                  px={{ base: 3, md: 4 }}
                   rightIcon={<FiSend />}
                   isDisabled={!newMessage.trim()}
                   _disabled={{ opacity: 0.5, cursor: "not-allowed" }}
                   onClick={sendMessage}
+                  minW={{ base: "auto", md: "auto" }}
                 >
                   Send
                 </Button>

@@ -422,23 +422,28 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
   return (
     <Box
       h="100%"
+      w="100%"
+      maxW="100%"
       display="flex"
       flexDirection="column"
       bg="rgba(15, 23, 42, 0.88)"
+      minW={0}
+      overflow="hidden"
     >
       <Flex
-        p={4}
-        pt={5}
+        p={{ base: 3, md: 4 }}
+        pt={{ base: 4, md: 5 }}
         align="center"
         justify="space-between"
         borderBottom="1px solid"
         borderColor="whiteAlpha.100"
         bg="rgba(15, 23, 42, 0.7)"
+        minW={0}
       >
         <Flex align="center" gap={3} minW={0}>
           <Box
-            w="40px"
-            h="40px"
+            w={{ base: "34px", md: "40px" }}
+            h={{ base: "34px", md: "40px" }}
             borderRadius="16px"
             bgGradient="linear(to-br, brand.500, brand.400)"
             display="flex"
@@ -450,10 +455,11 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
           </Box>
           <Box minW={0}>
             <Text
-              fontSize="lg"
+              fontSize={{ base: "md", md: "lg" }}
               fontWeight="700"
               letterSpacing="-0.03em"
               color="white"
+              noOfLines={1}
             >
               EchoSpace
             </Text>
@@ -481,7 +487,11 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
         </Tooltip>
       </Flex>
 
-      <Box p={4} borderBottom="1px solid" borderColor="whiteAlpha.100">
+      <Box
+        p={{ base: 3, md: 4 }}
+        borderBottom="1px solid"
+        borderColor="whiteAlpha.100"
+      >
         <Flex
           bg="whiteAlpha.50"
           border="1px solid"
@@ -504,7 +514,7 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
         </Flex>
       </Box>
 
-      <Box px={4} py={3}>
+      <Box px={{ base: 3, md: 4 }} py={3}>
         <Flex gap={2} wrap="wrap">
           {[
             { id: "all", label: "All" },
@@ -527,52 +537,13 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
         </Flex>
       </Box>
 
-      {/* <Box p={4} pb={0}>
-        <Flex
-          align="center"
-          gap={3}
-          bg="linear-gradient(135deg, rgba(79,70,229,0.2), rgba(15,23,42,0.7))"
-          border="1px solid"
-          borderColor="brand.500"
-          borderRadius="20px"
-          p={3}
-        >
-          <Avatar
-            name={currentUser?.name || "You"}
-            size="md"
-            bg="linear-gradient(135deg, #4f46e5, #8b5cf6)"
-            color="white"
-          />
-          <Box flex="1" minW={0}>
-            <Text fontSize="sm" fontWeight="700" color="white" noOfLines={1}>
-              {currentUser?.name || "User"}
-            </Text>
-            <Flex align="center" gap={2} mt={0.5}>
-              <Box
-                w={2.5}
-                h={2.5}
-                bg="green.400"
-                borderRadius="full"
-                boxShadow="0 0 0 3px rgba(52, 211, 153, 0.15)"
-              />
-              <Text fontSize="12px" color="gray.300">
-                Online
-              </Text>
-            </Flex>
-          </Box>
-          <Button
-            variant="ghost"
-            size="sm"
-            color="gray.200"
-            rightIcon={<FiChevronRight />}
-            onClick={handleLogout}
-            _hover={{ bg: "whiteAlpha.100" }}
-          >
-            Exit
-          </Button>
-        </Flex>
-      </Box> */}
-      <Box flex="1" overflowY="auto" px={4} py={4}>
+      <Box
+        flex="1"
+        overflowY="auto"
+        px={{ base: 3, md: 4 }}
+        py={{ base: 3, md: 4 }}
+        minW={0}
+      >
         <VStack spacing={3} align="stretch">
           {filteredGroups.length === 0 ? (
             <Box
@@ -627,7 +598,7 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
                     active ? "0 18px 38px rgba(79, 70, 229, 0.18)" : "none"
                   }
                 >
-                  <Flex align="center" gap={3}>
+                  <Flex align="center" gap={3} minW={0}>
                     <Avatar
                       name={group.name}
                       size="sm"
@@ -715,7 +686,7 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
         </VStack>
       </Box>
 
-      <Box p={4} pb={0}>
+      <Box p={{ base: 3, md: 4 }} pb={0}>
         <Text
           fontSize="xs"
           color="gray.400"
@@ -760,7 +731,7 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
                   }}
                   _hover={{ bg: "rgba(79, 70, 229, 0.08)" }}
                 >
-                  <Flex align="center" gap={3}>
+                  <Flex align="center" gap={3} minW={0}>
                     <Avatar
                       size="sm"
                       name={otherUser?.name || "User"}
@@ -791,7 +762,7 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
         </VStack>
       </Box>
 
-      <Box p={4} pb={0}>
+      <Box p={{ base: 3, md: 4 }} pb={0}>
         <Text
           fontSize="xs"
           color="gray.400"
@@ -818,6 +789,7 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
                 border="1px solid"
                 borderColor="whiteAlpha.100"
                 bg="rgba(15,23,42,0.7)"
+                minW={0}
               >
                 <Flex align="center" gap={3} minW={0}>
                   <Avatar size="sm" name={user.name} bg="gray.700" />
@@ -844,7 +816,7 @@ const Sidebar = ({ setSelectedGroup, setSelectedDM, socket }) => {
       </Box>
 
       <Box
-        p={4}
+        p={{ base: 3, md: 4 }}
         borderTop="1px solid"
         borderColor="whiteAlpha.100"
         bg="rgba(15, 23, 42, 0.7)"
