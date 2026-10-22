@@ -56,39 +56,34 @@ app.use(clerkMiddleware());
 
 const PORT = process.env.PORT || 5000;
 
-mongoose
-  .connect(process.env.MONGODB_URI, {
-    serverSelectionTimeoutMS: 5000,
-    socketTimeoutMS: 45000,
-    maxPoolSize: 10,
-  })
-  .then(() => {
-    console.log("Connected to MongoDB");
-  })
-  .catch((err) => {
-    console.error("MongoDB connection failed:", err.message);
-  });
+async function startServer() {
+  try {
+    if (!process.env.MONGODB_URI) {
+      throw new Error("MONGODB_URI is missing from environment variables");
+    }
 
-mongoose.connection.on("connected", () => {
-  console.log("MongoDB connected successfully");
-});
+    await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
+      maxPoolSize: 10,
+    });
 
-mongoose.connection.on("error", (err) => {
-  console.error("MongoDB connection error:");
-  console.error(err.message);
-});
+    console.log("Connected to MongoDB successfully");
 
-mongoose.connection.on("disconnected", () => {
-  console.warn("MongoDB disconnected. Reconnecting...");
-});
+    socketIo(io);
 
-socketIo(io);
+    server.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error("Server startup failed:", err.message);
+    process.exit(1);
+  }
+}
 
 app.use("/api/users", userRouter);
 app.use("/api/groups", groupRouter);
 app.use("/api/messages", messageRouter);
 app.use("/api/dm", dmRouter);
 
-server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+startServer();
